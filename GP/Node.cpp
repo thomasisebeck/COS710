@@ -31,7 +31,7 @@ string ConstantNode::toString(const vector<double>& vars) {
 VariableNode::VariableNode(int index) : index(index), Node(VARIABLE) {}
 
 double VariableNode::evaluate(const vector<double>& vars) {
-  assert((this->index < vars.size() && this->index > 0) &&
+  assert((this->index >= 0 && this->index < vars.size()) &&
 	 "Variable node index is out of bounds");
   // look up my value in the hashmap
   return vars[this->index];
@@ -86,9 +86,11 @@ string OperatorNode::toString(const vector<double>& vars) {
 
 void OperatorNode::addChild(unique_ptr<Node> newChild) {
   // adding the first child for unary, and first or second childe for binary
-  assert(((this->isUnary && children.empty()) ||
-	  (!this->isUnary && children.size() < 2)) &&
-	 "Cannot add child");
+  if (isUnary) {
+    assert(children.empty() && "Unary node already has a child.");
+  } else {
+    assert(children.size() < 2 && "Binary node already has two children.");
+  }
 
   this->children.push_back(std::move(newChild));
 }

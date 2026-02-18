@@ -7,7 +7,7 @@ using namespace std;
 
 int main() {
   const int A_ind = 0;
-  const vector<double> var_values = {1};
+  const vector<double> var_values = {2};
 
   const double CONST_NODE_ONE = 6;
   const double CONST_NODE_TWO = 4;
@@ -30,6 +30,8 @@ int main() {
   root->addChild(std::move(right));
 
   cout << root->toString(var_values) << endl;
+
+  cout << "Value: " << root->evaluate(var_values) << endl;
 
   return 0;
 }
