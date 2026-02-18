@@ -27,7 +27,7 @@ set(CMAKE_CXX_CLANG_TIDY
 # find_package(CURL REQUIRED)
 
 # Create the executable from your source files
-add_executable(out main.cpp)
+add_executable(out main.cpp Node.cpp)
 
 set_target_properties(out PROPERTIES COMPILE_FLAGS "-O0")
 

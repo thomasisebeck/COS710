@@ -18,7 +18,7 @@ class Node {
 
   // variable names mapped to values ("a" -> 4.1)
   virtual double evaluate(const std::vector<double>& vars) = 0;
-  virtual std::string print(const std::vector<double>& vars) = 0;
+  virtual std::string toString(const std::vector<double>& vars) = 0;
   virtual ~Node() = default;
 };
 
@@ -28,7 +28,7 @@ class VariableNode : public Node {
 
  public:
   VariableNode(int index);
-  std::string print(const std::vector<double>& vars) override;
+  std::string toString(const std::vector<double>& vars) override;
   double evaluate(const std::vector<double>& vars) override;
 };
 
@@ -44,7 +44,7 @@ class OperatorNode : public Node {
  public:
   OperatorNode(OpType type);
   void addChild(std::unique_ptr<Node> newChild);
-  std::string print(const std::vector<double>& vars) override;
+  std::string toString(const std::vector<double>& vars) override;
   double evaluate(const std::vector<double>& vars) override;
 };
 
@@ -56,6 +56,6 @@ class ConstantNode : public Node {
 
  public:
   ConstantNode(double value);
-  std::string print(const std::vector<double>& vars) override;
+  std::string toString(const std::vector<double>& vars) override;
   double evaluate(const std::vector<double>& vars) override;
 };

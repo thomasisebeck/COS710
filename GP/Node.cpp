@@ -22,7 +22,7 @@ double ConstantNode::evaluate(const vector<double>& vars) {
   return this->value;
 }
 
-string ConstantNode::print(const vector<double>& vars) {
+string ConstantNode::toString(const vector<double>& vars) {
   return std::to_string(this->value);
 }
 
@@ -31,11 +31,13 @@ string ConstantNode::print(const vector<double>& vars) {
 VariableNode::VariableNode(int index) : index(index), Node(VARIABLE) {}
 
 double VariableNode::evaluate(const vector<double>& vars) {
+  assert((this->index < vars.size() && this->index > 0) &&
+	 "Variable node index is out of bounds");
   // look up my value in the hashmap
   return vars[this->index];
 }
 
-string VariableNode::print(const vector<double>& vars) {
+string VariableNode::toString(const vector<double>& vars) {
   return "x(" + std::to_string(vars[this->index]) + ")";
 }
 
@@ -71,11 +73,11 @@ string convOpToString(OpType op) {
   }
 }
 
-string OperatorNode::print(const vector<double>& vars) {
+string OperatorNode::toString(const vector<double>& vars) {
   string childrenOut;
 
   for (const auto& child : this->children) {
-    childrenOut += child->print(vars) + ",";
+    childrenOut += child->toString(vars) + ",";
   }
 
   return convOpToString(this->type) + "( " +
@@ -84,10 +86,11 @@ string OperatorNode::print(const vector<double>& vars) {
 
 void OperatorNode::addChild(unique_ptr<Node> newChild) {
   // adding the first child for unary, and first or second childe for binary
-  assert((this->isUnary && children.empty()) ||
-	 (!this->isUnary && children.size() < 2));
+  assert(((this->isUnary && children.empty()) ||
+	  (!this->isUnary && children.size() < 2)) &&
+	 "Cannot add child");
 
-  this->children.push_back(move(newChild));
+  this->children.push_back(std::move(newChild));
 }
 
 double protectedDivide(double numerator, double denominator) {
