@@ -23,13 +23,23 @@ set(CMAKE_CXX_CLANG_TIDY
     -p=${CMAKE_BINARY_DIR}
 )
 
+
+file(COPY ${CMAKE_SOURCE_DIR}/dataset/  
+     DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/dataset/)
+
+
+add_subdirectory(csv-parser)
+
 # For finding local packages
 # find_package(CURL REQUIRED)
 
 # Create the executable from your source files
-add_executable(out main.cpp Node.cpp)
+add_executable(out main.cpp Node.cpp Tree.cpp FullGrowTree.cpp)
 
 set_target_properties(out PROPERTIES COMPILE_FLAGS "-O0")
+
+target_link_libraries(out csv)
+
 
 # link the libraries to trading_bot during execution
 # target_link_libraries(trading_bot PRIVATE CURL::libcurl)

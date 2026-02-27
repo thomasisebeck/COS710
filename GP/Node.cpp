@@ -38,6 +38,9 @@ double VariableNode::evaluate(const vector<double>& vars) {
 }
 
 string VariableNode::toString(const vector<double>& vars) {
+  assert((this->index >= 0 && this->index < vars.size()) &&
+	 "Variable node index out of bound");
+
   return "x(" + std::to_string(vars[this->index]) + ")";
 }
 
@@ -45,9 +48,10 @@ string VariableNode::toString(const vector<double>& vars) {
 
 OperatorNode::OperatorNode(OpType type) : Node(OPERATOR), type(type) {
   // to check the assert
-  this->isUnary = this->type == OpType::SIN || this->type == OpType::SQRT ||
-		  this->type == OpType::SQUARE;
+  this->isUnary = this->type == OpType::SQUARE;
 }
+
+bool OperatorNode::getIsUnary() const { return this->isUnary; }
 
 string convOpToString(OpType op) {
   switch (op) {
@@ -59,12 +63,14 @@ string convOpToString(OpType op) {
       return "MUL";
     case OpType::DIV:
       return "DIV";
+      /*
     case OpType::SQRT:
       return "SQRT";
     case OpType::SIN:
       return "SIN";
     case OpType::POW:
       return "POW";
+      */
     case OpType::SQUARE:
       return "SQUARE";
     default:
@@ -145,6 +151,7 @@ double OperatorNode::evaluate(const vector<double>& vars) {
       return this->children[0]->evaluate(vars) *
 	     this->children[1]->evaluate(vars);
 
+      /*
     case OpType::POW:
       // INFO: x to the power of n
       return protectedPow(this->children[0]->evaluate(vars),
@@ -155,6 +162,7 @@ double OperatorNode::evaluate(const vector<double>& vars) {
 
     case OpType::SQRT:
       return protectedSqrt(this->children[0]->evaluate(vars));
+      */
 
     case OpType::SUB:
       return this->children[0]->evaluate(vars) -

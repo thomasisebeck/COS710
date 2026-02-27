@@ -1,12 +1,14 @@
 #pragma once
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
-enum NodeType { OPERATOR, CONSTANT, VARIABLE };
+enum NodeType { OPERATOR, CONSTANT, VARIABLE, SIZE };
+const int NODE_TYPE_SIZE = static_cast<int>(NodeType::SIZE);
 
-enum class OpType { ADD, SUB, MUL, DIV, SQRT, SIN, POW, SQUARE };
+// INFO: remove these: SQRT, SIN, POW, likely not needed for "parabolic" shape
+enum class OpType { ADD, SUB, MUL, DIV, SQUARE, SIZE };
+const int OP_TYPE_SIZE = static_cast<int>(OpType::SIZE);
 
 class Node {
  private:
@@ -44,6 +46,7 @@ class OperatorNode : public Node {
  public:
   OperatorNode(OpType type);
   void addChild(std::unique_ptr<Node> newChild);
+  [[nodiscard]] bool getIsUnary() const;
   std::string toString(const std::vector<double>& vars) override;
   double evaluate(const std::vector<double>& vars) override;
 };
