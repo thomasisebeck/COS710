@@ -1,7 +1,6 @@
 #include "FullGrowTree.h"
 
 #include <cassert>
-#include <iostream>
 #include <memory>
 
 using namespace std;
@@ -51,3 +50,7 @@ unique_ptr<Node> FullGrowTree::fullGrowRec(int maxDepth) {
  * until the maximum depth has been reached
  */
 void FullGrowTree::grow() { this->root = fullGrowRec(this->getDepth()); }
+
+double FullGrowTree::evaluate(const std::vector<double>& vars) {
+  return this->root->evaluate(vars);
+}

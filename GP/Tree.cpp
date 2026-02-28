@@ -39,7 +39,7 @@ OpType Tree::getRandomOperator() {
   return static_cast<OpType>(Tree::getRandomInt(0, OP_TYPE_SIZE - 1));
 }
 
-string Tree::toString(std::vector<double>& vars) {
+string Tree::toString(const std::vector<double>& vars) {
   assert(this->root != nullptr);
 
   return this->root->toString(vars);

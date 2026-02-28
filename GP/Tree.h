@@ -12,6 +12,9 @@ class Tree {
   static std::mt19937 engine;
 
  protected:
+  // cannot instantiate
+  Tree() = default;
+
   std::unique_ptr<Node> root;
   static OpType getRandomOperator();
   [[nodiscard]] int getDepth() const;
@@ -26,7 +29,10 @@ class Tree {
   static int highestConstant;
 
   Tree(int depth, int numVars, double chooseConstantProbability);
-  virtual ~Tree() = default;
+  std::string toString(const std::vector<double>& vars);
+
   virtual void grow() = 0;
-  std::string toString(std::vector<double>& vars);
+
+  // must be on template
+  virtual double evaluate(const std::vector<double>& vars) = 0;
 };
