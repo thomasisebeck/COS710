@@ -7,39 +7,16 @@
 #include <tuple>
 #include <vector>
 
+#include "DataProccessor.h"
 #include "FullGrowTree.h"
-#include "csv-parser/include/internal/csv_reader.hpp"
 
 using namespace std;
-using namespace csv;
 
-namespace {
-
-void parseCSV() {
-  CSVReader reader("dataset/Dataset.csv");
-
-  for (auto& row : reader) {
-    // Note: Can also use index of
-    // column with [] operator
-    cout << row["utc_timestamp"].get<string>() << ", "
-	 << row["Electricity_load"].get<string>() << ", "
-	 << row["Residential_"
-		"electricity_price"]
-		.get<double>()
-	 << ", "
-	 << row["Residential_solar_"
-		"generation"]
-		.get<double>()
-	 << ", "
-	 << row["Residential_wind_"
-		"generation"]
-		.get<double>()
-	 << ", " << row["Temperature"].get<double>() << ", "
-	 << row["Relative Humidity"].get<double>() << endl;
-  }
+std::vector<Row> readDataToRows(const string& inputFile, int skipLines) {
+  DataProcessor processor;
+  processor.readCSV(inputFile, skipLines);
+  return processor.getRows();
 }
-
-}  // namespace
 
 enum class Action { GROW, EVALUATE, PRINT };
 
@@ -107,7 +84,7 @@ void evaluate(int startInd, int endIndExclusive,
     results[popInd] = errorSum;
   }
 
-  cout << str << endl;
+  // cout << str << endl;
 }
 
 // INFO: [start, end)
@@ -126,12 +103,14 @@ struct Config {
   int populationSize;
   int numThreads;
   int depth;
+  int generations;
   double chooseConstantProbability;
 };
 
-void epoch(vector<FullGrowTree>& population,
-	   const vector<vector<double>>& inputs, const vector<double>& targets,
-	   vector<double>& results, Config& conf) {
+void generation(vector<FullGrowTree>& population,
+		const vector<vector<double>>& inputs,
+		const vector<double>& targets, vector<double>& results,
+		Config& conf) {
   // list of threads
   vector<thread> threads;
   const int CHUNK_SIZE =
@@ -195,24 +174,59 @@ void epoch(vector<FullGrowTree>& population,
 }
 
 void smallTest() {
-  Config conf = {.populationSize = 6,
-		 .numThreads = 2,
-		 .depth = 3,
-		 .chooseConstantProbability = 0.5};
+  Config conf = {
+      .populationSize = 250,
+      .numThreads = 8,
+      .depth = 5,
+      .generations = 10,
+      .chooseConstantProbability = 0.5,
+  };
 
   vector<FullGrowTree> population(conf.populationSize);
 
-  // equation 3a + 2b
-  vector<vector<double>> inputs = {{1.0, 1.0},	{4.0, 2.0},  {0.0, 5.0},
-				   {-2.0, 1.0}, {3.0, -3.0}, {5.0, 0.0}};
-  vector<double> targets = {1.0, 8.0, -10.0, -8.0, 15.0, 15.0};
-  vector<double> results = {0, 0, 0, 0, 0, 0};
+  vector<vector<double>> inputs;
+  vector<double> targets;
+  vector<double> results;
 
-  epoch(population, inputs, targets, results, conf);
+  for (int i = 0; i < conf.populationSize; ++i) {  // 64 values
+    double x = i;
+
+    inputs.push_back({x, 0.0});	 // second column unused
+    targets.push_back(2.0 * x + 5.0);
+
+    // INFO: 0 for now, will populate later
+    results.push_back(0.0);
+  }
+
+  auto start = std::chrono::high_resolution_clock::now();
+
+  for (int i = 0; i < conf.generations; i++) {
+    cout << "Generation: " << i << endl;
+
+    generation(population, inputs, targets, results, conf);
+  }
+
+  auto end = std::chrono::high_resolution_clock::now();
+
+  std::cout << "Time: " << std::chrono::duration<double>(end - start).count()
+	    << "s\n";
 }
 
-int main() {
-  smallTest();
+void readFile() {
+  const string INPUT_FILE = "dataset/processed_min_max.csv";
 
-  return 0;
+  const auto rows = readDataToRows(INPUT_FILE, 5);
+
+  int max = 5;
+  int curr = 0;
+
+  cout << "first 5 lines read: " << endl;
+  for (auto r : rows) {
+    if (curr++ == max) break;
+
+    cout << "l1: " << r.load_1 << ", l2: " << r.load_2 << ", l3: " << r.load_3
+	 << ", l4: " << r.load_4 << ", curr: " << r.currentLoad << endl;
+  }
 }
+
+int main() { return 0; }
