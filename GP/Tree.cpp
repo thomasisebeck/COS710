@@ -1,7 +1,6 @@
 #include "Tree.h"
 
 #include <cassert>
-#include <iostream>
 #include <memory>
 #include <random>
 #include <utility>
@@ -14,14 +13,13 @@ using namespace std;
 std::mt19937 Tree::engine{std::random_device{}()};
 
 // TODO: test out which ones work with these
-int Tree::smallestConstant = -10;  // or whatever default you want
+int Tree::smallestConstant = -10;
 int Tree::highestConstant = 10;
 
 using namespace std;
 
-double Tree::getRandomConstant() {
-  static std::uniform_real_distribution<double> dist(Tree::smallestConstant,
-						     Tree::highestConstant);
+double Tree::getRandomDouble(int min, int max) {
+  std::uniform_real_distribution<double> dist(min, max);
 
   return dist(engine);
 }
@@ -60,6 +58,61 @@ void Tree::collectNodesRec(std::unique_ptr<Node>& curr,
   for (auto* childPointer : tempChildren) {
     collectNodesRec(*childPointer, res);
   }
+}
+
+unique_ptr<Node> Tree::getTerminal() {
+  // create a variable or constant node
+  // flip a coin to decide whether to choose a constant
+
+  double coin = this->getRandomDouble(0, 1);
+
+  if (coin < this->chooseConstantProbability) {
+    // get a random variable node
+    return make_unique<ConstantNode>(
+	Tree::getRandomDouble(Tree::smallestConstant, Tree::highestConstant));
+  }
+
+  // not making a constant, choosing a variable rather.....
+  return make_unique<VariableNode>(
+      Tree::getRandomInt(0, this->getNumVars() - 1));
+}
+
+unique_ptr<Node> Tree::growRec(int remainingDepth, bool fullGrow,
+			       double prematureLeafProbability) {
+  assert(this->getNumVars() > 0);
+
+  // base case: must generate a leaf node
+  if (remainingDepth == 0) {
+    return getTerminal();
+  }
+
+  // can make a non-terminal
+  if (!fullGrow) {
+    // flip a coin to see whether to make a terminal
+    const auto makeTerminal = this->getRandomDouble(0, 1);
+
+    if (makeTerminal <= prematureLeafProbability) {
+      return getTerminal();
+    }
+  }
+
+  // create the node of a random operator
+  auto operatorNode = make_unique<OperatorNode>(Tree::getRandomOperator());
+
+  if (operatorNode->getIsUnary()) {
+    // add one child that is an operator
+    operatorNode->addChild(
+	this->growRec(remainingDepth - 1, fullGrow, prematureLeafProbability));
+  } else {
+    // add two children that are operators
+    operatorNode->addChild(
+	this->growRec(remainingDepth - 1, fullGrow, prematureLeafProbability));
+    operatorNode->addChild(
+	this->growRec(remainingDepth - 1, fullGrow, prematureLeafProbability));
+  }
+
+  // will automatically be moved
+  return operatorNode;
 }
 
 std::vector<std::unique_ptr<Node>*> Tree::collectNodes() {
@@ -102,6 +155,12 @@ int Tree::getNumVars() const { return this->numVars; }
 
 double Tree::getChooseConstantProbability() const {
   return this->chooseConstantProbability;
+}
+
+void Tree::mutate() {
+  // INFO: get random node
+  // INFO: get depth of node
+  // INFO: replace the node with new subtree of depth (maxDepth - nodeDepth)
 }
 
 int Tree::getMaxDepth() { return this->maxDepth; }
