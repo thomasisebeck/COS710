@@ -1,5 +1,7 @@
 #include <cassert>
 #include <functional>
+#include <iomanip>
+#include <ios>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -12,9 +14,9 @@
 
 using namespace std;
 
-std::vector<Row> readDataToRows(const string& inputFile, int skipLines) {
+std::vector<Row> readDataToRows(const string& inputFile) {
   DataProcessor processor;
-  processor.readCSV(inputFile, skipLines);
+  processor.readCSV(inputFile);
   return processor.getRows();
 }
 
@@ -213,9 +215,9 @@ void smallTest() {
 }
 
 void readFile() {
-  const string INPUT_FILE = "dataset/processed_min_max.csv";
+  const string INPUT_FILE = "dataset/processed.csv";
 
-  const auto rows = readDataToRows(INPUT_FILE, 5);
+  const auto rows = readDataToRows(INPUT_FILE);
 
   int max = 5;
   int curr = 0;
@@ -224,9 +226,17 @@ void readFile() {
   for (auto r : rows) {
     if (curr++ == max) break;
 
-    cout << "l1: " << r.load_1 << ", l2: " << r.load_2 << ", l3: " << r.load_3
-	 << ", l4: " << r.load_4 << ", curr: " << r.currentLoad << endl;
+    cout << std::setw(5) << std::fixed << "ld: " << r.load
+	 << "\t N1: " << r.loadN1 << "\t N2: " << r.loadN2
+	 << "\t minSin: " << r.minuteSin << "\t minCos: " << r.minuteCos
+	 << "\t daySin: " << r.dayOfYearSin << "\t dayCos: " << r.dayOfYearCos
+	 << endl;
   }
 }
 
-int main() { return 0; }
+void crossoverTest() {}
+
+int main() {
+  readFile();
+  return 0;
+}

@@ -3,12 +3,13 @@
 #include <vector>
 
 struct Row {
-  int timeIndex;
-  double currentLoad;
-  double load_1;
-  double load_2;
-  double load_3;
-  double load_4;
+  double load;
+  double loadN1;
+  double loadN2;
+  double dayOfYearCos;
+  double dayOfYearSin;
+  double minuteCos;
+  double minuteSin;
 };
 
 class DataProcessor {
@@ -17,6 +18,6 @@ class DataProcessor {
   std::string inputFile;
 
  public:
-  void readCSV(std::string inputFile, int skipLines);
+  void readCSV(std::string inputFile);
   std::vector<Row> getRows();
 };

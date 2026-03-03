@@ -2,27 +2,18 @@
 #include "csv-parser/include/internal/csv_reader.hpp"
 using namespace std;
 
-void DataProcessor::readCSV(string inputFile, int skipLines) {
+void DataProcessor::readCSV(string inputFile) {
   csv::CSVReader reader(inputFile);
 
-  int skipCount = 0;
-
-  for (auto& row : reader) {
-    // skip the number of lines needed
-    if (skipCount < skipLines) {
-      skipCount++;
-      continue;
-    }
-
-    rows.push_back({
-	.timeIndex = row["time_index"].get<int>(),
-	.currentLoad = row["min_max_scaled_load"].get<double>(),
-	.load_1 = row["load_n1"].get<double>(),
-	.load_2 = row["load_n2"].get<double>(),
-	.load_3 = row["load_n3"].get<double>(),
-	.load_4 = row["load_n4"].get<double>(),
-    });
-  }
+  for (auto& row : reader)
+    rows.push_back(
+	{.load = row["load"].get<double>(),
+	 .loadN1 = row["load_n1"].get<double>(),
+	 .loadN2 = row["load_n2"].get<double>(),
+	 .dayOfYearCos = row["normalised_day_of_year_cos"].get<double>(),
+	 .dayOfYearSin = row["normalised_day_of_year_sin"].get<double>(),
+	 .minuteCos = row["normalised_minute_cos"].get<double>(),
+	 .minuteSin = row["normalised_minute_sin"].get<double>()});
 }
 
 vector<Row> DataProcessor::getRows() { return this->rows; }
