@@ -234,9 +234,33 @@ void readFile() {
   }
 }
 
-void crossoverTest() {}
+void crossoverTest() {
+  const double CHOOSE_CONST_PROB = 0.5;
+  const int DEPTH = 5;
+  vector<double> vars = {0.5, 0.2};
+  Tree::highestConstant = 10;
+  Tree::smallestConstant = -10;
+
+  FullGrowTree tree1(DEPTH, vars.size(), CHOOSE_CONST_PROB);
+  tree1.grow();
+
+  FullGrowTree tree2(DEPTH, vars.size(), CHOOSE_CONST_PROB);
+  tree2.grow();
+
+  cout << "Trees: " << endl;
+  cout << tree1.toString(vars) << endl;
+  cout << tree2.toString(vars) << endl;
+  cout << "---------------" << endl;
+
+  tree1.crossover(tree2);
+
+  cout << "After crossover: " << endl;
+  cout << tree1.toString(vars) << endl;
+  cout << tree2.toString(vars) << endl;
+  cout << "---------------" << endl;
+}
 
 int main() {
-  readFile();
+  crossoverTest();
   return 0;
 }

@@ -49,7 +49,7 @@ unique_ptr<Node> FullGrowTree::fullGrowRec(int maxDepth) {
  * This function will sprout either 1 or 2 nodes on each level
  * until the maximum depth has been reached
  */
-void FullGrowTree::grow() { this->root = fullGrowRec(this->getDepth()); }
+void FullGrowTree::grow() { this->root = fullGrowRec(this->getMaxDepth()); }
 
 double FullGrowTree::evaluate(const std::vector<double>& vars) {
   return this->root->evaluate(vars);

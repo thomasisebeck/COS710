@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <cstddef>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -12,6 +13,11 @@ using namespace std;
 Node::Node(NodeType type) : type(type) {}
 
 NodeType Node::getType() const { return this->type; }
+
+// do nohing
+void Node::getChildren(std::vector<std::unique_ptr<Node>*>& res) {}
+
+size_t Node::getNumberOfChildren() { return 0; }
 
 // -------------------- CONSTANT NODE ------------------ //
 
@@ -89,6 +95,14 @@ string OperatorNode::toString(const vector<double>& vars) {
   return convOpToString(this->type) + "( " +
 	 childrenOut.substr(0, childrenOut.length() - 1) + " )";
 }
+
+void OperatorNode::getChildren(std::vector<std::unique_ptr<Node>*>& res) {
+  for (auto& child : this->children) {
+    res.push_back(&child);
+  }
+}
+
+size_t OperatorNode::getNumberOfChildren() { return this->children.size(); }
 
 void OperatorNode::addChild(unique_ptr<Node> newChild) {
   // adding the first child for unary, and first or second childe for binary

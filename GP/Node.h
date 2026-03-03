@@ -21,6 +21,8 @@ class Node {
   // variable names mapped to values ("a" -> 4.1)
   virtual double evaluate(const std::vector<double>& vars) = 0;
   virtual std::string toString(const std::vector<double>& vars) = 0;
+  virtual void getChildren(std::vector<std::unique_ptr<Node>*>& res);
+  virtual size_t getNumberOfChildren();
   virtual ~Node() = default;
 };
 
@@ -48,6 +50,9 @@ class OperatorNode : public Node {
   void addChild(std::unique_ptr<Node> newChild);
   [[nodiscard]] bool getIsUnary() const;
   std::string toString(const std::vector<double>& vars) override;
+  void getChildren(std::vector<std::unique_ptr<Node>*>& res) override;
+
+  size_t getNumberOfChildren() override;
   double evaluate(const std::vector<double>& vars) override;
 };
 

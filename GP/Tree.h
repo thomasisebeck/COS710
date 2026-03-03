@@ -1,15 +1,20 @@
 #pragma once
 #include <memory>
 #include <random>
+#include <vector>
 
 #include "Node.h"
 
 class Tree {
  private:
-  int depth;
+  int maxDepth;
   double chooseConstantProbability;
   int numVars;
   static std::mt19937 engine;
+
+  void collectNodesRec(std::unique_ptr<Node>& curr,
+		       std::vector<std::unique_ptr<Node>*>& res);
+  std::vector<std::unique_ptr<Node>*> collectNodes();
 
  protected:
   // cannot instantiate
@@ -17,7 +22,7 @@ class Tree {
 
   std::unique_ptr<Node> root;
   static OpType getRandomOperator();
-  [[nodiscard]] int getDepth() const;
+  [[nodiscard]] int getMaxDepth() const;
   [[nodiscard]] int getNumVars() const;
   [[nodiscard]] double getChooseConstantProbability() const;
   static double getRandomConstant();
@@ -30,6 +35,8 @@ class Tree {
 
   Tree(int depth, int numVars, double chooseConstantProbability);
   std::string toString(const std::vector<double>& vars);
+  int getMaxDepth();
+  void crossover(Tree& other);
 
   virtual void grow() = 0;
 
