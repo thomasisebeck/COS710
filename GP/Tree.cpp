@@ -60,6 +60,10 @@ void Tree::collectNodesRec(std::unique_ptr<Node>& curr,
   }
 }
 
+double Tree::evaluate(const std::vector<double>& vars) {
+  return this->root->evaluate(vars);
+}
+
 unique_ptr<Node> Tree::getTerminal() {
   // create a variable or constant node
   // flip a coin to decide whether to choose a constant

@@ -247,7 +247,7 @@ void crossoverTest() {
   FullGrowTree tree2(DEPTH, vars.size(), CHOOSE_CONST_PROB);
   tree2.grow();
 
-  cout << "Trees: " << endl;
+  cout << "Full grow trees: " << endl;
   cout << tree1.toString(vars) << endl;
   cout << tree2.toString(vars) << endl;
   cout << "---------------" << endl;

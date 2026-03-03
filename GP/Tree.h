@@ -46,5 +46,5 @@ class Tree {
   virtual void grow() = 0;
 
   // must be on template
-  virtual double evaluate(const std::vector<double>& vars) = 0;
+  double evaluate(const std::vector<double>& vars);
 };
