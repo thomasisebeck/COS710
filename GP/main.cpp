@@ -11,6 +11,7 @@
 
 #include "DataProccessor.h"
 #include "FullGrowTree.h"
+#include "GrowTree.h"
 
 using namespace std;
 
@@ -260,7 +261,40 @@ void crossoverTest() {
   cout << "---------------" << endl;
 }
 
+void growTreeTest() {
+  const double CHOOSE_CONST_PROB = 0.5;
+  const double PREMATURE_LEAF_PROB = 0.3;
+  const int DEPTH = 5;
+  vector<double> vars = {0.5, 0.2};
+  Tree::highestConstant = 10;
+  Tree::smallestConstant = -10;
+
+  GrowTree tree1(DEPTH, vars.size(), CHOOSE_CONST_PROB, PREMATURE_LEAF_PROB);
+  GrowTree tree2(DEPTH, vars.size(), CHOOSE_CONST_PROB, PREMATURE_LEAF_PROB);
+  GrowTree tree3(DEPTH, vars.size(), CHOOSE_CONST_PROB, PREMATURE_LEAF_PROB);
+  GrowTree tree4(DEPTH, vars.size(), CHOOSE_CONST_PROB, PREMATURE_LEAF_PROB);
+  GrowTree tree5(DEPTH, vars.size(), CHOOSE_CONST_PROB, PREMATURE_LEAF_PROB);
+
+  tree1.grow();
+  tree2.grow();
+  tree3.grow();
+  tree4.grow();
+  tree5.grow();
+
+  cout << tree1.toString(vars) << endl;
+  cout << tree2.toString(vars) << endl;
+  cout << tree3.toString(vars) << endl;
+  cout << tree4.toString(vars) << endl;
+  cout << tree5.toString(vars) << endl;
+
+  cout << tree1.evaluate(vars) << endl;
+  cout << tree2.evaluate(vars) << endl;
+  cout << tree3.evaluate(vars) << endl;
+  cout << tree4.evaluate(vars) << endl;
+  cout << tree5.evaluate(vars) << endl;
+}
+
 int main() {
-  crossoverTest();
+  growTreeTest();
   return 0;
 }

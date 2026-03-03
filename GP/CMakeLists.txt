@@ -25,7 +25,7 @@ add_subdirectory(csv-parser)
 # For finding local packages find_package(CURL REQUIRED)
 
 # Create the executable from your source files
-add_executable(out main.cpp Node.cpp Tree.cpp FullGrowTree.cpp
+add_executable(out main.cpp Node.cpp Tree.cpp FullGrowTree.cpp GrowTree.cpp
                    DataProcessor.cpp)
 
 set_target_properties(out PROPERTIES COMPILE_FLAGS "-O0")
