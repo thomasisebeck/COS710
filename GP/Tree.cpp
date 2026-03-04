@@ -1,6 +1,8 @@
 #include "Tree.h"
 
+#include <algorithm>
 #include <cassert>
+#include <iostream>
 #include <memory>
 #include <random>
 #include <utility>
@@ -127,20 +129,12 @@ std::vector<std::unique_ptr<Node>*> Tree::collectNodes() {
   return toRet;
 }
 
-/*
- *
- // OLD IMPL
-// get random nodes
-auto myNodes = this->collectNodes();
-auto theirNodes = other.collectNodes();
-
-// get crossover points
-int myCrossoverPoint = this->getRandomInt(0, myNodes.size() - 1);
-int theirCrossoverPoint = this->getRandomInt(0, theirNodes.size() - 1);
-
-// swap the nodes
-*/
 void Tree::crossover(Tree& other) {
+  // prevent same tree crossover
+  if (this == &other) {
+    return;
+  }
+
   auto myNodes = this->collectNodes();
   auto otherNodes = other.collectNodes();
 
@@ -161,10 +155,53 @@ double Tree::getChooseConstantProbability() const {
   return this->chooseConstantProbability;
 }
 
+int findDepthOfNodeRec(Node* root, Node* toFind) {
+  // base case -> unwind if found
+  if (root == toFind) return 0;
+
+  // not found
+  if (root == nullptr) return -1;
+
+  // populate children
+  std::vector<std::unique_ptr<Node>*> children;
+  root->getChildren(children);
+
+  for (auto& c : children) {
+    int depth = findDepthOfNodeRec(c->get(), toFind);
+
+    if (depth >= 0) return depth + 1;
+  }
+
+  // not found
+  return -1;
+}
+
+int Tree::getDepthOfNode(Node* toFind) {
+  int res = findDepthOfNodeRec(this->root.get(), toFind);
+  assert(res != -1 && "Node not found");
+  return res;
+}
+
 void Tree::mutate() {
   // INFO: get random node
-  // INFO: get depth of node
-  // INFO: replace the node with new subtree of depth (maxDepth - nodeDepth)
+
+  std::vector<std::unique_ptr<Node>*> myNodes = this->collectNodes();
+
+  // get unique pointer pointer to a random node
+  std::unique_ptr<Node>* randomNode =
+      myNodes[this->getRandomInt(0, myNodes.size() - 1)];
+
+  // INFO: get remaining height that can be grown
+  // Pass in a Node* (call get on unique_ptr)
+  const int remainingHeight =
+      this->getMaxDepth() - getDepthOfNode(randomNode->get());
+
+  cout << "Node to mutate " << randomNode->get()->toString({0.5, 0.2}) << endl;
+
+  // INFO: replace the node with new subtree of depth (maxDepth -
+  // nodeDepth) remaining height to grow = maxHeight - currDepth growRec
+  // returns unique_ptr<Node> move new tree into the unique pointer
+  *randomNode = std::move(this->growRec(remainingHeight, true, 0));
 }
 
 int Tree::getMaxDepth() { return this->maxDepth; }

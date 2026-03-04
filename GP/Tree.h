@@ -17,11 +17,11 @@ class Tree {
   std::vector<std::unique_ptr<Node>*> collectNodes();
 
   std::unique_ptr<Node> getTerminal();
+  int getDepthOfNode(Node* toFind);
 
  protected:
   // cannot instantiate
   Tree() = default;
-
   std::unique_ptr<Node> root;
   static OpType getRandomOperator();
   [[nodiscard]] int getMaxDepth() const;
