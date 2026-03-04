@@ -27,7 +27,6 @@ class Tree {
   [[nodiscard]] int getMaxDepth() const;
   [[nodiscard]] int getNumVars() const;
   [[nodiscard]] double getChooseConstantProbability() const;
-  static int getRandomInt(int min, int max);
   static double getRandomDouble(int min, int max);
   std::unique_ptr<Node> growRec(int remainingDepth, bool fullGrow,
 				double prematureLeafProbability);
@@ -38,6 +37,7 @@ class Tree {
   static int highestConstant;
 
   Tree(int depth, int numVars, double chooseConstantProbability);
+  static int getRandomInt(int min, int max);
   std::string toString(const std::vector<double>& vars);
   int getMaxDepth();
   void crossover(Tree& other);

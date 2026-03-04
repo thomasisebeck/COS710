@@ -22,15 +22,16 @@ file(COPY ${CMAKE_SOURCE_DIR}/dataset/
 
 add_subdirectory(csv-parser)
 
-# For finding local packages find_package(CURL REQUIRED)
+# Source files
+set(SOURCES main.cpp Node.cpp Tree.cpp FullGrowTree.cpp GrowTree.cpp
+            DataProcessor.cpp)
 
-# Create the executable from your source files
-add_executable(out main.cpp Node.cpp Tree.cpp FullGrowTree.cpp GrowTree.cpp
-                   DataProcessor.cpp)
+# Create executable
+add_executable(out ${SOURCES})
 
 set_target_properties(out PROPERTIES COMPILE_FLAGS "-O0")
 
 target_link_libraries(out csv)
 
-# link the libraries to trading_bot during execution
-# target_link_libraries(trading_bot PRIVATE CURL::libcurl)
+# For finding local packages find_package(CURL REQUIRED)
+# target_link_libraries(out PRIVATE CURL::libcurl)
