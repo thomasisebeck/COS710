@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -32,6 +33,10 @@ string ConstantNode::toString(const vector<double>& vars) {
   return std::to_string(this->value);
 }
 
+std::unique_ptr<Node> ConstantNode::clone() const {
+  return make_unique<ConstantNode>(this->value);
+}
+
 // -------------------- VARIABLE NODE ------------------ //
 
 VariableNode::VariableNode(int index) : index(index), Node(VARIABLE) {}
@@ -50,11 +55,26 @@ string VariableNode::toString(const vector<double>& vars) {
   return "x(" + std::to_string(vars[this->index]) + ")";
 }
 
+std::unique_ptr<Node> VariableNode::clone() const {
+  return make_unique<VariableNode>(this->index);
+}
+
 // -------------------- OPERATOR NODE ------------------ //
 
 OperatorNode::OperatorNode(OpType type) : Node(OPERATOR), type(type) {
   // to check the assert
   this->isUnary = this->type == OpType::SQUARE;
+}
+
+std::unique_ptr<Node> OperatorNode::clone() const {
+  // return a clone copy of this node
+  auto copy = make_unique<OperatorNode>(this->type);
+
+  for (const auto& child : this->children) {
+    copy->addChild(child->clone());
+  }
+
+  return copy;
 }
 
 bool OperatorNode::getIsUnary() const { return this->isUnary; }
@@ -74,9 +94,9 @@ string convOpToString(OpType op) {
       return "SQRT";
     case OpType::SIN:
       return "SIN";
+      */
     case OpType::POW:
       return "POW";
-      */
     case OpType::SQUARE:
       return "SQUARE";
     default:
@@ -115,28 +135,18 @@ void OperatorNode::addChild(unique_ptr<Node> newChild) {
   this->children.push_back(std::move(newChild));
 }
 
+// create a smallest denomitator value
+const double EPSILON = 1e-6;
+
 double protectedDivide(double numerator, double denominator) {
-  if (denominator == 0) {
-    return 0;
+  if (std::abs(denominator) < EPSILON) {
+    return 1;
   }
 
   return numerator / denominator;
 }
 
-double protectedSqrt(double num) {
-  if (num < 0) {
-    return 0;
-  }
-
-  return sqrt(num);
-}
-
-double protectedPow(double base, double exp) {
-  if (base < 0) {
-    return 0;
-  }
-  return pow(base, exp);
-}
+double protectedSqrt(double num) { return sqrt(std::abs(num)); }
 
 double OperatorNode::evaluate(const vector<double>& vars) {
   // INFO: unary must have 1 child
@@ -165,22 +175,13 @@ double OperatorNode::evaluate(const vector<double>& vars) {
       return this->children[0]->evaluate(vars) *
 	     this->children[1]->evaluate(vars);
 
-      /*
-    case OpType::POW:
-      // INFO: x to the power of n
-      return protectedPow(this->children[0]->evaluate(vars),
-			  this->children[1]->evaluate(vars));
-
-    case OpType::SIN:
-      return sin(this->children[0]->evaluate(vars));
-
-    case OpType::SQRT:
-      return protectedSqrt(this->children[0]->evaluate(vars));
-      */
-
     case OpType::SUB:
       return this->children[0]->evaluate(vars) -
 	     this->children[1]->evaluate(vars);
+
+    case OpType::POW:
+      return std::pow(this->children[0]->evaluate(vars),
+		      this->children[1]->evaluate(vars));
 
     default:
       assert(false && "OperatorNode::evaluate - Unhandled node type");

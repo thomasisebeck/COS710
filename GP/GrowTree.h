@@ -13,5 +13,6 @@ class GrowTree : public Tree {
   GrowTree(int depth, int numVars, double chooseConstantProbability,
 	   double prematureLeafProbability);
 
+  [[nodiscard]] std::unique_ptr<Tree> clone() const override;
   void grow() override;
 };

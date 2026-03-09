@@ -196,7 +196,8 @@ void Tree::mutate() {
   const int remainingHeight =
       this->getMaxDepth() - getDepthOfNode(randomNode->get());
 
-  cout << "Node to mutate " << randomNode->get()->toString({0.5, 0.2}) << endl;
+  // cout << "Node to mutate " << randomNode->get()->toString({0.5, 0.2}) <<
+  // endl;
 
   // INFO: replace the node with new subtree of depth (maxDepth -
   // nodeDepth) remaining height to grow = maxHeight - currDepth growRec

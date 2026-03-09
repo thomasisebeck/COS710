@@ -7,7 +7,7 @@ enum NodeType { OPERATOR, CONSTANT, VARIABLE, SIZE };
 const int NODE_TYPE_SIZE = static_cast<int>(NodeType::SIZE);
 
 // INFO: remove these: SQRT, SIN, POW, likely not needed for "parabolic" shape
-enum class OpType { ADD, SUB, MUL, DIV, SQUARE, SIZE };
+enum class OpType { ADD, SUB, MUL, DIV, SQUARE, POW, SIZE };
 const int OP_TYPE_SIZE = static_cast<int>(OpType::SIZE);
 
 class Node {
@@ -16,6 +16,7 @@ class Node {
 
  public:
   Node(NodeType type);
+  Node(const Node& other);
   [[nodiscard]] NodeType getType() const;
 
   // variable names mapped to values ("a" -> 4.1)
@@ -24,6 +25,7 @@ class Node {
   virtual void getChildren(std::vector<std::unique_ptr<Node>*>& res);
   virtual size_t getNumberOfChildren();
   virtual ~Node() = default;
+  [[nodiscard]] virtual std::unique_ptr<Node> clone() const = 0;
 };
 
 class VariableNode : public Node {
@@ -34,6 +36,7 @@ class VariableNode : public Node {
   VariableNode(int index);
   std::string toString(const std::vector<double>& vars) override;
   double evaluate(const std::vector<double>& vars) override;
+  [[nodiscard]] std::unique_ptr<Node> clone() const override;
 };
 
 // operator nodes have a type (oporand)
@@ -54,6 +57,7 @@ class OperatorNode : public Node {
 
   size_t getNumberOfChildren() override;
   double evaluate(const std::vector<double>& vars) override;
+  [[nodiscard]] std::unique_ptr<Node> clone() const override;
 };
 
 // always a leaf node, no children
@@ -66,4 +70,5 @@ class ConstantNode : public Node {
   ConstantNode(double value);
   std::string toString(const std::vector<double>& vars) override;
   double evaluate(const std::vector<double>& vars) override;
+  [[nodiscard]] std::unique_ptr<Node> clone() const override;
 };

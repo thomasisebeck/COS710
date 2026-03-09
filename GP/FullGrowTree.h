@@ -8,5 +8,6 @@ class FullGrowTree : public Tree {
   FullGrowTree() = default;
   FullGrowTree(int depth, int numVars, double chooseConstantProbability);
 
+  [[nodiscard]] std::unique_ptr<Tree> clone() const override;
   void grow() override;
 };

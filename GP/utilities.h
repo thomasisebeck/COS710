@@ -11,12 +11,26 @@ using namespace std;
 
 namespace utils {
 
-vector<int> tournamentSelection(const vector<double>& errors,
-				int tournamentSize) {
+void printTrees(vector<unique_ptr<Tree>>& population, vector<double>& inputs) {
+  for (int i = 0; i < population.size(); i++) {
+    cout << population[i]->toString(inputs) << endl;
+  }
+}
+
+struct SelectionResult {
+  vector<int> selectedIndices;
+  size_t bestOverallIndex;
+};
+
+SelectionResult tournamentSelection(const vector<double>& errors,
+				    int tournamentSize) {
   // preallocate a vector to store the selection indices
   vector<int> selectedIndices;
   // resize fills with 0s
   selectedIndices.resize(errors.size());
+
+  size_t bestOverallIndex = 0;
+  double bestOverallFitness = errors[0];
 
   for (size_t i = 0; i < errors.size(); i++) {
     // assume this index wins
@@ -35,9 +49,16 @@ vector<int> tournamentSelection(const vector<double>& errors,
 
     // add the best performing individual
     selectedIndices[i] = bestIndividualIndex;
+
+    // error is higher with the best individual
+    if (bestOverallFitness > errors[bestIndividualIndex]) {
+      bestOverallFitness = errors[bestIndividualIndex];
+      bestOverallIndex = bestIndividualIndex;
+    }
   }
 
-  return selectedIndices;
+  return {.selectedIndices = selectedIndices,
+	  .bestOverallIndex = bestOverallIndex};
 }
 
 vector<Row> readDataToRows(const string& inputFile) {
@@ -71,6 +92,19 @@ tuple<int, int> getIndices(int threadIndex, int populationSize, int chunkSize) {
 }
 
 int cielInt(int num, int denom) { return (num + denom - 1) / denom; }
+
+vector<tuple<int, int>> getThreadIndices(int populationSize, int numThreads) {
+  const int CHUNK_SIZE = cielInt(static_cast<int>(populationSize), numThreads);
+  vector<tuple<int, int>> indices;
+  indices.reserve(numThreads);
+
+  for (int i = 0; i < numThreads; i++) {
+    indices.push_back(
+	getIndices(i, static_cast<int>(populationSize), CHUNK_SIZE));
+  }
+
+  return indices;
+}
 
 void readFile() {
   const string INPUT_FILE = "dataset/processed.csv";

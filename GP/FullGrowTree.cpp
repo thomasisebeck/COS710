@@ -1,5 +1,7 @@
 #include "FullGrowTree.h"
 
+#include <cassert>
+
 using namespace std;
 
 FullGrowTree::FullGrowTree(int depth, int numVars,
@@ -12,4 +14,17 @@ FullGrowTree::FullGrowTree(int depth, int numVars,
  */
 void FullGrowTree::grow() {
   this->root = this->growRec(this->getMaxDepth(), true, 0);
+}
+
+std::unique_ptr<Tree> FullGrowTree::clone() const {
+  auto newTree =
+      make_unique<FullGrowTree>(this->getMaxDepth(), this->getNumVars(),
+				this->getChooseConstantProbability());
+
+  assert(this->root != nullptr && "This root is null with fullgrowtree clone");
+
+  newTree->root = root->clone();
+
+  // automatically moves
+  return newTree;
 }
