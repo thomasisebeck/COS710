@@ -11,6 +11,22 @@ using namespace std;
 
 namespace utils {
 
+double calculateSD(const vector<double>& data) {
+  double sum = 0.0, mean, standardDeviation = 0.0;
+
+  for (const auto& el : data) {
+    sum += el;
+  }
+
+  mean = sum / data.size();
+
+  for (const auto& el : data) {
+    standardDeviation += pow(el - mean, 2);
+  }
+
+  return sqrt(standardDeviation / data.size());
+}
+
 void printTrees(vector<unique_ptr<Tree>>& population, vector<double>& inputs) {
   for (int i = 0; i < population.size(); i++) {
     cout << population[i]->toString(inputs) << endl;
@@ -61,12 +77,6 @@ SelectionResult tournamentSelection(const vector<double>& errors,
 	  .bestOverallIndex = bestOverallIndex};
 }
 
-vector<Row> readDataToRows(const string& inputFile) {
-  DataProcessor processor;
-  processor.readCSV(inputFile);
-  return processor.getRows();
-}
-
 template <typename T>
 string vectorToString(const vector<T>& toPrint) {
   stringstream res;
@@ -106,22 +116,4 @@ vector<tuple<int, int>> getThreadIndices(int populationSize, int numThreads) {
   return indices;
 }
 
-void readFile() {
-  const string INPUT_FILE = "dataset/processed.csv";
-
-  const auto rows = readDataToRows(INPUT_FILE);
-
-  int max = 5;
-  int curr = 0;
-
-  cout << "first 5 lines read: " << endl;
-  for (auto r : rows) {
-    if (curr++ == max) break;
-
-    cout << setw(5) << std::fixed << "ld: " << r.load << "\t N1: " << r.loadN1
-	 << "\t N2: " << r.loadN2 << "\t minSin: " << r.minuteSin
-	 << "\t minCos: " << r.minuteCos << "\t daySin: " << r.dayOfYearSin
-	 << "\t dayCos: " << r.dayOfYearCos << endl;
-  }
-}
 }  // namespace utils

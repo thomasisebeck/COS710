@@ -1,5 +1,5 @@
 import math
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import csv
 from datetime import datetime
 
@@ -39,7 +39,10 @@ min_load = 10000
 
 lag_lines = 2
 
-with open('../dataset/Dataset.csv','r') as csvfile:
+IN_PATH = "./dataset/Dataset.csv"
+OUT_PATH = './dataset/processed.csv'
+
+with open(IN_PATH,'r') as csvfile:
     lines = csv.reader(csvfile, delimiter=',')
 
     # skip the first row (titles)
@@ -53,10 +56,10 @@ with open('../dataset/Dataset.csv','r') as csvfile:
             if (load > max_load):
                 max_load = load
 
-            if (load > min_load): 
+            if (load < min_load): 
                 min_load = load
 
-with open('../dataset/Dataset.csv','r') as csvfile:
+with open(IN_PATH,'r') as csvfile:
     lines = csv.reader(csvfile, delimiter=',')
 
     # skip the first row (titles)
@@ -68,7 +71,7 @@ with open('../dataset/Dataset.csv','r') as csvfile:
             # Parse timestamp
             dt = datetime.strptime(row[UCT_TIMESTAMP], "%d/%m/%Y %H:%M")
 
-            day_of_year = dt.month * MONTHS_IN_YEAR + dt.day;
+            day_of_year = dt.timetuple().tm_yday;
 
             day_pi_scaled =  2 * math.pi * (day_of_year / DAYS_IN_YEAR ); 
 
@@ -78,7 +81,7 @@ with open('../dataset/Dataset.csv','r') as csvfile:
             normalised_day_of_year_cos = math.cos( day_pi_scaled );
             normalised_day_of_year_sin = math.sin( day_pi_scaled );
 
-            minutes = dt.hour + MINUTES_IN_HOUR * dt.minute;
+            minutes = dt.hour * MINUTES_IN_HOUR + dt.minute;
 
             minutes_pi_scaled = 2 * math.pi * ( minutes / MINUTES_IN_DAY )
 
@@ -93,6 +96,7 @@ with open('../dataset/Dataset.csv','r') as csvfile:
             else:
                 ToWrite.append({
                     'load': load_min_max_scaled,
+                    'load_delta': load_min_max_scaled - load_n1,
                     'load_n1' : load_n1,
                     'load_n2' : load_n2,
                     'normalised_day_of_year_cos': normalised_day_of_year_cos,
@@ -105,8 +109,8 @@ with open('../dataset/Dataset.csv','r') as csvfile:
             load_n1 = load_min_max_scaled
   
 # write to a csv file
-with open('../dataset/processed.csv', 'w', newline='') as csvfile:
-    fieldnames=['load','load_n1',
+with open(OUT_PATH, 'w', newline='') as csvfile:
+    fieldnames=['load_delta','load_n1',
                 'load_n2',
                 'normalised_day_of_year_cos',
                 'normalised_day_of_year_sin',

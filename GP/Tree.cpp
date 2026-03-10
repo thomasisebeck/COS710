@@ -17,10 +17,11 @@ std::mt19937 Tree::engine{std::random_device{}()};
 // TODO: test out which ones work with these
 int Tree::smallestConstant = -10;
 int Tree::highestConstant = 10;
+double Tree::tuneRange = 0.5;
 
 using namespace std;
 
-double Tree::getRandomDouble(int min, int max) {
+double Tree::getRandomDouble(double min, double max) {
   std::uniform_real_distribution<double> dist(min, max);
 
   return dist(engine);
@@ -88,7 +89,7 @@ unique_ptr<Node> Tree::growRec(int remainingDepth, bool fullGrow,
   assert(this->getNumVars() > 0);
 
   // base case: must generate a leaf node
-  if (remainingDepth == 0) {
+  if (remainingDepth <= 0) {
     return getTerminal();
   }
 
@@ -182,22 +183,33 @@ int Tree::getDepthOfNode(Node* toFind) {
   return res;
 }
 
+double Tree::getTuneConstantProbability() const {
+  return this->tuneConstantProbability;
+}
+
 void Tree::mutate() {
   // INFO: get random node
 
   std::vector<std::unique_ptr<Node>*> myNodes = this->collectNodes();
 
-  // get unique pointer pointer to a random node
+  assert(myNodes.size() >= 1 && "Nodes are empty");
+
   std::unique_ptr<Node>* randomNode =
       myNodes[this->getRandomInt(0, myNodes.size() - 1)];
 
+  // tune constant probabalistically
+  if (Tree::getRandomDouble(0, 1) < this->tuneConstantProbability &&
+      randomNode->get()->tryTuneValue(
+	  Tree::getRandomDouble(-Tree::tuneRange, Tree::tuneRange))) {
+    return;
+  }
+
   // INFO: get remaining height that can be grown
   // Pass in a Node* (call get on unique_ptr)
-  const int remainingHeight =
-      this->getMaxDepth() - getDepthOfNode(randomNode->get());
+  int remainingHeight = this->getMaxDepth() - getDepthOfNode(randomNode->get());
 
-  // cout << "Node to mutate " << randomNode->get()->toString({0.5, 0.2}) <<
-  // endl;
+  // do nothing
+  if (remainingHeight <= 0) return;
 
   // INFO: replace the node with new subtree of depth (maxDepth -
   // nodeDepth) remaining height to grow = maxHeight - currDepth growRec
@@ -207,10 +219,12 @@ void Tree::mutate() {
 
 int Tree::getMaxDepth() { return this->maxDepth; }
 
-Tree::Tree(int depth, int numVars, double chooseConstantProbability)
+Tree::Tree(int depth, int numVars, double chooseConstantProbability,
+	   double tuneConstantProbability)
     : maxDepth(depth),
       numVars(numVars),
-      chooseConstantProbability(chooseConstantProbability) {
+      chooseConstantProbability(chooseConstantProbability),
+      tuneConstantProbability(tuneConstantProbability) {
   assert((chooseConstantProbability > 0 && chooseConstantProbability < 1) &&
 	 "Choose constant probability should be between 0 and 1");
   // INFO: generate a random operator for the root

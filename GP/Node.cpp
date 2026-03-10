@@ -1,35 +1,34 @@
 #include "Node.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
-#include <iostream>
 #include <memory>
 #include <string>
 using namespace std;
 
 // ------------------------ NODE ----------------------- //
 
-Node::Node(NodeType type) : type(type) {}
-
-NodeType Node::getType() const { return this->type; }
-
 // do nohing
 void Node::getChildren(std::vector<std::unique_ptr<Node>*>& res) {}
 
 size_t Node::getNumberOfChildren() { return 0; }
 
+// fail the tuning unless constant node
+bool Node::tryTuneValue(double) { return false; }
+
 // -------------------- CONSTANT NODE ------------------ //
 
-ConstantNode::ConstantNode(double value) : Node(CONSTANT), value(value) {}
+ConstantNode::ConstantNode(double value) : value(value) {}
 
-double ConstantNode::evaluate(const vector<double>& vars) {
+double ConstantNode::evaluate(const vector<double>&) {
   // constant node does not care about variables
   return this->value;
 }
 
-string ConstantNode::toString(const vector<double>& vars) {
+string ConstantNode::toString(const vector<double>&) {
   return std::to_string(this->value);
 }
 
@@ -37,9 +36,15 @@ std::unique_ptr<Node> ConstantNode::clone() const {
   return make_unique<ConstantNode>(this->value);
 }
 
+bool ConstantNode::tryTuneValue(double delta) {
+  this->value += delta;
+
+  return true;
+}
+
 // -------------------- VARIABLE NODE ------------------ //
 
-VariableNode::VariableNode(int index) : index(index), Node(VARIABLE) {}
+VariableNode::VariableNode(int index) : index(index) {}
 
 double VariableNode::evaluate(const vector<double>& vars) {
   assert((this->index >= 0 && this->index < vars.size()) &&
@@ -52,7 +57,8 @@ string VariableNode::toString(const vector<double>& vars) {
   assert((this->index >= 0 && this->index < vars.size()) &&
 	 "Variable node index out of bound");
 
-  return "x(" + std::to_string(vars[this->index]) + ")";
+  return "x" + std::to_string(this->index) + "(" +
+	 std::to_string(vars[this->index]) + ")";
 }
 
 std::unique_ptr<Node> VariableNode::clone() const {
@@ -61,7 +67,7 @@ std::unique_ptr<Node> VariableNode::clone() const {
 
 // -------------------- OPERATOR NODE ------------------ //
 
-OperatorNode::OperatorNode(OpType type) : Node(OPERATOR), type(type) {
+OperatorNode::OperatorNode(OpType type) : type(type) {
   // to check the assert
   this->isUnary = this->type == OpType::SQUARE;
 }
@@ -148,6 +154,15 @@ double protectedDivide(double numerator, double denominator) {
 
 double protectedSqrt(double num) { return sqrt(std::abs(num)); }
 
+double protectedPow(double base, double exp) {
+  const double MAX_EXP = 10;
+
+  // exponent can only go up to 10
+  exp = std::clamp(exp, -MAX_EXP, MAX_EXP);
+
+  return pow(abs(base), exp);
+}
+
 double OperatorNode::evaluate(const vector<double>& vars) {
   // INFO: unary must have 1 child
   // binay must have 2 children
@@ -180,8 +195,8 @@ double OperatorNode::evaluate(const vector<double>& vars) {
 	     this->children[1]->evaluate(vars);
 
     case OpType::POW:
-      return std::pow(this->children[0]->evaluate(vars),
-		      this->children[1]->evaluate(vars));
+      return protectedPow(this->children[0]->evaluate(vars),
+			  this->children[1]->evaluate(vars));
 
     default:
       assert(false && "OperatorNode::evaluate - Unhandled node type");

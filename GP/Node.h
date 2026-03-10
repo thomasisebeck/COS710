@@ -11,13 +11,9 @@ enum class OpType { ADD, SUB, MUL, DIV, SQUARE, POW, SIZE };
 const int OP_TYPE_SIZE = static_cast<int>(OpType::SIZE);
 
 class Node {
- private:
-  NodeType type;
-
  public:
-  Node(NodeType type);
+  Node() = default;
   Node(const Node& other);
-  [[nodiscard]] NodeType getType() const;
 
   // variable names mapped to values ("a" -> 4.1)
   virtual double evaluate(const std::vector<double>& vars) = 0;
@@ -26,6 +22,7 @@ class Node {
   virtual size_t getNumberOfChildren();
   virtual ~Node() = default;
   [[nodiscard]] virtual std::unique_ptr<Node> clone() const = 0;
+  virtual bool tryTuneValue(double delta);
 };
 
 class VariableNode : public Node {
@@ -57,6 +54,7 @@ class OperatorNode : public Node {
 
   size_t getNumberOfChildren() override;
   double evaluate(const std::vector<double>& vars) override;
+
   [[nodiscard]] std::unique_ptr<Node> clone() const override;
 };
 
@@ -71,4 +69,6 @@ class ConstantNode : public Node {
   std::string toString(const std::vector<double>& vars) override;
   double evaluate(const std::vector<double>& vars) override;
   [[nodiscard]] std::unique_ptr<Node> clone() const override;
+
+  bool tryTuneValue(double delta) override;
 };

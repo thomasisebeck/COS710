@@ -5,8 +5,10 @@
 using namespace std;
 
 FullGrowTree::FullGrowTree(int depth, int numVars,
-			   double chooseConstantProbability)
-    : Tree(depth, numVars, chooseConstantProbability) {}
+			   double chooseConstantProbability,
+			   double tuneConstantProbability)
+    : Tree(depth, numVars, chooseConstantProbability, tuneConstantProbability) {
+}
 
 /*
  * This function will sprout max nodes on each level
@@ -17,9 +19,9 @@ void FullGrowTree::grow() {
 }
 
 std::unique_ptr<Tree> FullGrowTree::clone() const {
-  auto newTree =
-      make_unique<FullGrowTree>(this->getMaxDepth(), this->getNumVars(),
-				this->getChooseConstantProbability());
+  auto newTree = make_unique<FullGrowTree>(
+      this->getMaxDepth(), this->getNumVars(),
+      this->getChooseConstantProbability(), this->getTuneConstantProbability());
 
   assert(this->root != nullptr && "This root is null with fullgrowtree clone");
 

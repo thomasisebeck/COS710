@@ -2,22 +2,14 @@
 #include <string>
 #include <vector>
 
-struct Row {
-  double load;
-  double loadN1;
-  double loadN2;
-  double dayOfYearCos;
-  double dayOfYearSin;
-  double minuteCos;
-  double minuteSin;
-};
-
 class DataProcessor {
  private:
-  std::vector<Row> rows;
+  std::vector<double> targets;
+  std::vector<std::vector<double>> inputs;
   std::string inputFile;
 
  public:
   void readCSV(std::string inputFile);
-  std::vector<Row> getRows();
+  std::vector<double> getTargets();
+  std::vector<std::vector<double>> getInputs();
 };
