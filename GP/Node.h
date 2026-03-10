@@ -7,7 +7,7 @@ enum NodeType { OPERATOR, CONSTANT, VARIABLE, SIZE };
 const int NODE_TYPE_SIZE = static_cast<int>(NodeType::SIZE);
 
 // INFO: remove these: SQRT, SIN, POW, likely not needed for "parabolic" shape
-enum class OpType { ADD, SUB, MUL, DIV, SQUARE, POW, SIZE };
+enum class OpType { ADD, SUB, MUL, DIV, SQUARE, SIZE };
 const int OP_TYPE_SIZE = static_cast<int>(OpType::SIZE);
 
 class Node {

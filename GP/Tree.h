@@ -47,6 +47,7 @@ class Tree {
   std::string toString(const std::vector<double>& vars);
   int getMaxDepth();
   void crossover(Tree& other);
+  [[nodiscard]] int getNodeCount();
   void mutate();
 
   [[nodiscard]] virtual std::unique_ptr<Tree> clone() const = 0;

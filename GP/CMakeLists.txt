@@ -5,18 +5,20 @@ project(Practice)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-# For lsp
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# For lsp set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# For TMP: if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+# add_compile_options(-ftemplate-depth=256) endif()
+
+# Max optimisation flags
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-ftemplate-depth=256)
+  add_compile_options(-O3 -march=native -mtune=native -flto -ffast-math)
 endif()
 
-# DEBUG for lsp
-set(CMAKE_BUILD_TYPE Debug)
-set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
+# DEBUG for lsp set(CMAKE_BUILD_TYPE Debug) set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
 
-# RELEASE set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_BUILD_TYPE Release)
 
 set(CMAKE_CXX_CLANG_TIDY clang-tidy; -p=${CMAKE_BINARY_DIR})
 
@@ -32,7 +34,7 @@ set(SOURCES main.cpp Node.cpp Tree.cpp FullGrowTree.cpp GrowTree.cpp
 # Create executable
 add_executable(out ${SOURCES})
 
-set_target_properties(out PROPERTIES COMPILE_FLAGS "-O0")
+# DEBUG for lsp set_target_properties(out PROPERTIES COMPILE_FLAGS "-O0")
 
 target_link_libraries(out csv)
 

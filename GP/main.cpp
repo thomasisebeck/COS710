@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -53,7 +54,8 @@ void evaluate(int startInd, int endIndExclusive,
 	      vector<unique_ptr<Tree>>& population,
 	      const vector<vector<double>>& inputs,
 	      const vector<double>& targets, vector<double>& errors,
-	      ErrorStrategy errorStrategy, int evaluationSampleSize) {
+	      ErrorStrategy errorStrategy, int evaluationSampleSize,
+	      const double& parsimonyPressure) {
   assert(inputs.size() == targets.size() && "targets inputs size mismatch");
 
   vector<int> evaluationSampleIndices;
@@ -91,7 +93,9 @@ void evaluate(int startInd, int endIndExclusive,
 
     switch (errorStrategy) {
       case MEAN_SQUARED_ERROR:
-	errors[popInd] = errorSum / evaluationSampleSize;
+	errors[popInd] =
+	    (errorSum / evaluationSampleSize) +
+	    (population[popInd]->getNodeCount() * parsimonyPressure);
 
 	break;
       default:
@@ -112,6 +116,7 @@ struct Config {
   double mutationRate;
   int evaluationSampleSize;
   double tuneConstantProbability;
+  double parsimonyPressure;
 };
 
 struct GrowStrategy {
@@ -192,7 +197,7 @@ void generation(vector<unique_ptr<Tree>>& population,
 
     threads.emplace_back(&evaluate, start, end, ref(population), cref(inputs),
 			 cref(targets), ref(errors), errorStrategy,
-			 conf.evaluationSampleSize);
+			 conf.evaluationSampleSize, conf.parsimonyPressure);
   }
 
   // INFO: 2B) join
@@ -299,6 +304,7 @@ struct ValidationResult {
   double bestMSE;
   double worstMSE;
   double stdDev;
+  double medianMSE;
 };
 
 ValidationResult validatePopulation(const vector<vector<double>>& inputs,
@@ -306,8 +312,11 @@ ValidationResult validatePopulation(const vector<vector<double>>& inputs,
 				    vector<unique_ptr<Tree>>& population) {
   // take each of the individuals in the population and get the MSE per
   // individual
-  ValidationResult res = {
-      .avgMSE = 0, .bestMSE = 10000000, .worstMSE = 0, .stdDev = 0};
+  ValidationResult res = {.avgMSE = 0,
+			  .bestMSE = 10000000,
+			  .worstMSE = 0,
+			  .stdDev = 0,
+			  .medianMSE = 0};
 
   assert((inputs.size() == targets.size()) &&
 	 "Inputs, targets and errors are not the same size");
@@ -342,6 +351,10 @@ ValidationResult validatePopulation(const vector<vector<double>>& inputs,
 
   res.stdDev = utils::calculateSD(mse);
 
+  std::ranges::sort(mse.begin(), mse.end());
+
+  res.medianMSE = mse[mse.size() / 2];
+
   return res;
 }
 
@@ -373,7 +386,7 @@ int main() {
   Tree::engine.seed(SEED);
 
   GrowStrategy growStrategy = {
-      .minDepth = 2, .maxDepth = 6, .fullGrow = 200, .grow = 200};
+      .minDepth = 2, .maxDepth = 8, .fullGrow = 1000, .grow = 1000};
 
   const int POP_SIZE = (growStrategy.fullGrow + growStrategy.grow) *
 		       (growStrategy.maxDepth - growStrategy.minDepth + 1);
@@ -383,18 +396,19 @@ int main() {
 
   Config config = {.populationSize = POP_SIZE,
 		   .numThreads = 8,
-		   .generations = 200,
+		   .generations = 100,
 		   .chooseConstantProbability = 0.7,
-		   .tournamentSize = 5,
+		   .tournamentSize = 3,
 		   .numVars = static_cast<int>(trainingInputs[0].size()),
-		   .prematureLeafProbability = 0.1,
+		   .prematureLeafProbability = 0.5,
 		   .crossoverRate = 0.7,
-		   .mutationRate = 0.4,
-		   .evaluationSampleSize = 3000,
-		   .tuneConstantProbability = 0.7};
+		   .mutationRate = 0.35,
+		   .evaluationSampleSize = 30000,
+		   .tuneConstantProbability = 0.7,
+		   .parsimonyPressure = 0.00008};
   // ------------------------------------------------------------ //
 
-  auto start = chrono::high_resolution_clock::now();
+  chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
 
   // allocate popluation
   vector<unique_ptr<Tree>> population;
@@ -406,30 +420,34 @@ int main() {
   generationTest(trainingInputs, trainingTargets, tempErrors, growStrategy,
 		 population, config);
 
-  // measure duration
-  auto stop = chrono::high_resolution_clock::now();
-  auto duration = chrono::duration_cast<chrono::milliseconds>(stop - start);
+  chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
+
+  chrono::duration<double> duration =
+      duration_cast<chrono::duration<double>>(t2 - t1);
+
+  cout << "Calculating results..." << endl;
 
   // test population on validation set
   auto validationResults =
       validatePopulation(validationInputs, validationTargets, population);
 
   cout << "-------------------- RESULTS ---------------------- " << endl;
-  cout << "seed,bestMSE,worstMSE,avgMSE,stdDevMSE,smallestConstant,"
+  cout << "seed,bestMSE,worstMSE,medianMSE,avgMSE,stdDevMSE,smallestConstant,"
 	  "highestConstant,"
 	  "minDepth,maxDepth,fullGrow,grow,popSize,generations,tournamentSize,"
 	  "prematureLeafProbability,mutationRate,crossoverRate,"
-	  "tuneConstantProbability,runtimeMs"
+	  "tuneConstantProbability,runtimeS"
        << endl;
   cout << SEED << "," << validationResults.bestMSE << ","
-       << validationResults.worstMSE << "," << validationResults.avgMSE << ","
-       << validationResults.stdDev << "," << Tree::smallestConstant << ","
-       << Tree::highestConstant << "," << growStrategy.minDepth << ","
-       << growStrategy.maxDepth << "," << growStrategy.fullGrow << ","
-       << growStrategy.grow << "," << POP_SIZE << "," << config.generations
-       << "," << config.tournamentSize << "," << config.prematureLeafProbability
-       << "," << config.mutationRate << "," << config.crossoverRate << ","
-       << config.tuneConstantProbability << "," << duration.count() << endl;
+       << validationResults.worstMSE << "," << validationResults.medianMSE
+       << "," << validationResults.avgMSE << "," << validationResults.stdDev
+       << "," << Tree::smallestConstant << "," << Tree::highestConstant << ","
+       << growStrategy.minDepth << "," << growStrategy.maxDepth << ","
+       << growStrategy.fullGrow << "," << growStrategy.grow << "," << POP_SIZE
+       << "," << config.generations << "," << config.tournamentSize << ","
+       << config.prematureLeafProbability << "," << config.mutationRate << ","
+       << config.crossoverRate << "," << config.tuneConstantProbability << ","
+       << duration.count() << endl;
   cout << "--------------------------------------------------- " << endl;
 
   return 0;

@@ -95,14 +95,6 @@ string convOpToString(OpType op) {
       return "MUL";
     case OpType::DIV:
       return "DIV";
-      /*
-    case OpType::SQRT:
-      return "SQRT";
-    case OpType::SIN:
-      return "SIN";
-      */
-    case OpType::POW:
-      return "POW";
     case OpType::SQUARE:
       return "SQUARE";
     default:
@@ -194,11 +186,9 @@ double OperatorNode::evaluate(const vector<double>& vars) {
       return this->children[0]->evaluate(vars) -
 	     this->children[1]->evaluate(vars);
 
-    case OpType::POW:
-      return protectedPow(this->children[0]->evaluate(vars),
-			  this->children[1]->evaluate(vars));
-
     default:
       assert(false && "OperatorNode::evaluate - Unhandled node type");
   }
+
+  assert(false && "OperatorNode::evaluate - Unhandled node type");
 }

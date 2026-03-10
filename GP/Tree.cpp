@@ -130,6 +130,8 @@ std::vector<std::unique_ptr<Node>*> Tree::collectNodes() {
   return toRet;
 }
 
+int Tree::getNodeCount() { return this->collectNodes().size(); }
+
 void Tree::crossover(Tree& other) {
   // prevent same tree crossover
   if (this == &other) {
