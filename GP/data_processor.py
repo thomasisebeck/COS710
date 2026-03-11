@@ -1,6 +1,7 @@
 import math
 # import matplotlib.pyplot as plt
 import csv
+from collections import deque
 from datetime import datetime
 
 Names = []
@@ -29,15 +30,25 @@ RELATIVE_HUMIDITY=6
 
 MONTHS_IN_YEAR = 12
 DAYS_IN_YEAR = 365
+PREV_DAY_LAG = 96
 MINUTES_IN_HOUR = 60
 MINUTES_IN_DAY = 24 * MINUTES_IN_HOUR
 load_n1 = 0
 load_n2 = 0
+load_n3 = 0
+load_n4 = 0
+load_n5 = 0
+load_n6 = 0
+prev_day_load = 0
 
 max_load = 0
 min_load = 10000
 
-lag_lines = 2
+lag_lines = 6
+
+curr_day = 0
+
+prev_day_buffer = deque(maxlen=PREV_DAY_LAG)
 
 IN_PATH = "./dataset/Dataset.csv"
 OUT_PATH = './dataset/processed.csv'
@@ -91,27 +102,46 @@ with open(IN_PATH,'r') as csvfile:
             load = float(row[ELECTRICITY_LOAD])
             load_min_max_scaled = ( load - min_load) / ( max_load - min_load )
 
-            if (lag_lines > 0):
-                lag_lines = lag_lines - 1
+            if len(prev_day_buffer) == PREV_DAY_LAG:
+                prev_day_load = prev_day_buffer[0]
             else:
+                prev_day_load = None
+
+            if prev_day_load is not None:
+
                 ToWrite.append({
                     'load': load_min_max_scaled,
-                    'load_delta': load_min_max_scaled - load_n1,
-                    'load_n1' : load_n1,
-                    'load_n2' : load_n2,
+                    'load_n1': load_n1,
+                    'load_n2': load_n2,
+                    'load_n3': load_n3,
+                    'load_n4': load_n4,
+                    'load_n5': load_n5,
+                    'load_n6': load_n6,
+                    'load_prev_day': prev_day_load,
                     'normalised_day_of_year_cos': normalised_day_of_year_cos,
                     'normalised_day_of_year_sin': normalised_day_of_year_sin,
                     'normalised_minute_cos': normalised_minute_cos,
                     'normalised_minute_sin': normalised_minute_sin
                 })
 
+            load_n6 = load_n5
+            load_n5 = load_n4
+            load_n4 = load_n3
+            load_n3 = load_n2
             load_n2 = load_n1
             load_n1 = load_min_max_scaled
+
+            prev_day_buffer.append(load_min_max_scaled)
   
 # write to a csv file
 with open(OUT_PATH, 'w', newline='') as csvfile:
-    fieldnames=['load_delta','load_n1',
+    fieldnames=['load','load_n1',
                 'load_n2',
+                'load_n3',
+                'load_n4',
+                'load_n5',
+                'load_n6',
+                'load_prev_day',
                 'normalised_day_of_year_cos',
                 'normalised_day_of_year_sin',
                 'normalised_minute_cos',

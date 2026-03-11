@@ -305,6 +305,7 @@ struct ValidationResult {
   double worstMSE;
   double stdDev;
   double medianMSE;
+  int bestIndividualIndex;
 };
 
 ValidationResult validatePopulation(const vector<vector<double>>& inputs,
@@ -316,7 +317,8 @@ ValidationResult validatePopulation(const vector<vector<double>>& inputs,
 			  .bestMSE = 10000000,
 			  .worstMSE = 0,
 			  .stdDev = 0,
-			  .medianMSE = 0};
+			  .medianMSE = 0,
+			  .bestIndividualIndex = 0};
 
   assert((inputs.size() == targets.size()) &&
 	 "Inputs, targets and errors are not the same size");
@@ -341,8 +343,12 @@ ValidationResult validatePopulation(const vector<vector<double>>& inputs,
   double totalError = 0;
 
   // get the average, best and worst
-  for (const auto& err : mse) {
-    if (err < res.bestMSE) res.bestMSE = err;
+  for (size_t i = 0; i < mse.size(); ++i) {
+    const auto& err = mse[i];
+    if (err < res.bestMSE) {
+      res.bestMSE = err;
+      res.bestIndividualIndex = i;
+    }
     if (err > res.worstMSE) res.worstMSE = err;
     totalError += err;
   }
@@ -381,30 +387,32 @@ int main() {
 
   cout << "Done ..." << endl;
 
+  cout << "Num input vars: " << trainingInputs[0].size() << endl;
+
   // ----------------------------- CONFIG ----------------------- //
-  const int SEED = 1010;
+  const int SEED = 5000;
   Tree::engine.seed(SEED);
 
   GrowStrategy growStrategy = {
-      .minDepth = 2, .maxDepth = 8, .fullGrow = 1000, .grow = 1000};
+      .minDepth = 2, .maxDepth = 5, .fullGrow = 50, .grow = 50};
 
   const int POP_SIZE = (growStrategy.fullGrow + growStrategy.grow) *
 		       (growStrategy.maxDepth - growStrategy.minDepth + 1);
 
-  Tree::highestConstant = 5;
-  Tree::smallestConstant = -5;
+  Tree::highestConstant = 2;
+  Tree::smallestConstant = -2;
 
   Config config = {.populationSize = POP_SIZE,
 		   .numThreads = 8,
-		   .generations = 100,
-		   .chooseConstantProbability = 0.7,
+		   .generations = 300,
+		   .chooseConstantProbability = 0.5,
 		   .tournamentSize = 3,
 		   .numVars = static_cast<int>(trainingInputs[0].size()),
-		   .prematureLeafProbability = 0.5,
+		   .prematureLeafProbability = 0.25,
 		   .crossoverRate = 0.7,
 		   .mutationRate = 0.35,
-		   .evaluationSampleSize = 30000,
-		   .tuneConstantProbability = 0.7,
+		   .evaluationSampleSize = 100000,
+		   .tuneConstantProbability = 0.5,
 		   .parsimonyPressure = 0.00008};
   // ------------------------------------------------------------ //
 
@@ -448,6 +456,10 @@ int main() {
        << config.prematureLeafProbability << "," << config.mutationRate << ","
        << config.crossoverRate << "," << config.tuneConstantProbability << ","
        << duration.count() << endl;
+  cout << "BEST INDIVIDUAL: "
+       << population[validationResults.bestIndividualIndex]->toString(
+	      testInputs[0])
+       << endl;
   cout << "--------------------------------------------------- " << endl;
 
   return 0;
