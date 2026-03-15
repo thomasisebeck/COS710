@@ -36,9 +36,10 @@ class Tree {
   static int smallestConstant;
   static int highestConstant;
   static double tuneRange;
+  static int seed;
 
   // for grow
-  static std::mt19937 engine;
+  static thread_local std::mt19937 engine;
 
   Tree(int depth, int numVars, double chooseConstantProbability,
        double tuneConstantProbability);

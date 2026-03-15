@@ -4,8 +4,8 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <numeric>
 #include <random>
-#include <stdexcept>
 #include <string>
 #include <thread>
 #include <tuple>
@@ -43,67 +43,6 @@ void grow(int startInd, int endIndExclusive, vector<Tree*>& population,
   }
 }
 
-// INFO: inputs is a 2d vector that
-// represent the variable inputs of the
-// tree targets is a 1d vector which
-// each tree is trying to evaluate to
-// (given each set of inputs) results is
-// a 1d vector storing the values of the
-// evaluations
-void evaluate(int startInd, int endIndExclusive,
-	      vector<unique_ptr<Tree>>& population,
-	      const vector<vector<double>>& inputs,
-	      const vector<double>& targets, vector<double>& errors,
-	      ErrorStrategy errorStrategy, int evaluationSampleSize,
-	      const double& parsimonyPressure) {
-  assert(inputs.size() == targets.size() && "targets inputs size mismatch");
-
-  vector<int> evaluationSampleIndices;
-  evaluationSampleIndices.reserve(evaluationSampleSize);
-
-  // create the evaluation criteria
-  for (size_t currTargetInd = 0; currTargetInd < evaluationSampleSize;
-       currTargetInd++) {
-    evaluationSampleIndices.push_back(Tree::getRandomInt(0, inputs.size() - 1));
-  }
-
-  assert(evaluationSampleIndices.size() == evaluationSampleSize);
-
-  // do the action my individuals
-  for (int popInd = startInd; popInd < endIndExclusive; popInd++) {
-    double errorSum = 0;
-
-    // loop through all the targets
-    for (size_t currTargetInd = 0; currTargetInd < evaluationSampleSize;
-	 currTargetInd++) {
-      int select = evaluationSampleIndices[currTargetInd];
-      double value = population[popInd]->evaluate(inputs[select]);
-      double currError = value - targets[select];
-
-      // get the error based on the error strategy
-      switch (errorStrategy) {
-	case MEAN_SQUARED_ERROR:
-	  errorSum += (currError * currError);
-
-	  break;
-	default:
-	  throw runtime_error("Unknown error strategy");
-      }
-    }
-
-    switch (errorStrategy) {
-      case MEAN_SQUARED_ERROR:
-	errors[popInd] =
-	    (errorSum / evaluationSampleSize) +
-	    (population[popInd]->getNodeCount() * parsimonyPressure);
-
-	break;
-      default:
-	throw runtime_error("Unknown error strategy");
-    }
-  }
-}
-
 struct Config {
   int populationSize;
   int numThreads;
@@ -117,7 +56,60 @@ struct Config {
   int evaluationSampleSize;
   double tuneConstantProbability;
   double parsimonyPressure;
+  double highestStoppingError;
+  double highestHitError;
 };
+
+// INFO: inputs is a 2d vector that
+// represent the variable inputs of the
+// tree targets is a 1d vector which
+// each tree is trying to evaluate to
+// (given each set of inputs) results is
+// a 1d vector storing the values of the
+// evaluations
+void evaluate(int startInd, int endIndExclusive,
+	      vector<unique_ptr<Tree>>& population,
+	      const vector<vector<double>>& inputs,
+	      const vector<double>& targets, vector<double>& errors,
+	      const Config& conf, vector<int>& threadHits,
+	      const int& threadHitIndex) {
+  assert(inputs.size() == targets.size() && "targets inputs size mismatch");
+
+  threadHits[threadHitIndex] = 0;
+
+  vector<int> evaluationSampleIndices;
+  evaluationSampleIndices.reserve(conf.evaluationSampleSize);
+
+  // create the evaluation criteria
+  for (size_t currTargetInd = 0; currTargetInd < conf.evaluationSampleSize;
+       currTargetInd++) {
+    evaluationSampleIndices.push_back(Tree::getRandomInt(0, inputs.size() - 1));
+  }
+
+  assert(evaluationSampleIndices.size() == conf.evaluationSampleSize);
+
+  // do the action my individuals
+  for (int popInd = startInd; popInd < endIndExclusive; popInd++) {
+    double errorSum = 0;
+
+    // loop through all the targets
+    for (size_t currTargetInd = 0; currTargetInd < conf.evaluationSampleSize;
+	 currTargetInd++) {
+      int select = evaluationSampleIndices[currTargetInd];
+      double value = population[popInd]->evaluate(inputs[select]);
+      double currError = value - targets[select];
+
+      // get the error based on the error strategy
+      errorSum += (currError * currError);
+    }
+
+    errors[popInd] =
+	(errorSum / conf.evaluationSampleSize) +
+	(population[popInd]->getNodeCount() * conf.parsimonyPressure);
+
+    if (errors[popInd] < conf.highestHitError) threadHits[threadHitIndex]++;
+  }
+}
 
 struct GrowStrategy {
   int minDepth;
@@ -173,15 +165,29 @@ void growPopulation(vector<unique_ptr<Tree>>& population, Config& conf,
   std::ranges::shuffle(population, rng);
 }
 
+struct generationRet {
+  vector<unique_ptr<Tree>> overallBestIndividual;
+  double overallLowestError;
+};
+
+struct GenerationRet {
+  bool mustStop;
+  int hits;
+};
+
 // assumes that the initial trees are already grown
-void generation(vector<unique_ptr<Tree>>& population,
-		const vector<vector<double>>& inputs,
-		const vector<double>& targets, vector<double>& errors,
-		Config& conf, ErrorStrategy errorStrategy,
-		std::unique_ptr<Tree>& overallBestIndividual,
-		double& overallLowestError) {
+GenerationRet generation(vector<unique_ptr<Tree>>& population,
+			 const vector<vector<double>>& inputs,
+			 const vector<double>& targets, vector<double>& errors,
+			 const vector<vector<double>>& validationInputs,
+			 const vector<double>& validationTargets,
+			 vector<double>& validationErrors, Config& conf,
+			 unique_ptr<Tree>& fittestIndivdual,
+			 double& fittestErr) {
   assert(population.size() % 2 == 0 &&
 	 "Population size must be divisible by 2");
+
+  GenerationRet toRet = {.mustStop = false, .hits = 0};
 
   // list of threads
   vector<thread> threads;
@@ -191,13 +197,15 @@ void generation(vector<unique_ptr<Tree>>& population,
 
   // -----------------------------------------------------
 
+  vector<int> threadHits(conf.numThreads, 0);
+
   // INFO: 2A) spawn threads to evaluate the whole buffer
   for (int i = 0; i < conf.numThreads; i++) {
     auto [start, end] = indices[i];
 
     threads.emplace_back(&evaluate, start, end, ref(population), cref(inputs),
-			 cref(targets), ref(errors), errorStrategy,
-			 conf.evaluationSampleSize, conf.parsimonyPressure);
+			 cref(targets), ref(errors), cref(conf),
+			 ref(threadHits), i);
   }
 
   // INFO: 2B) join
@@ -206,14 +214,17 @@ void generation(vector<unique_ptr<Tree>>& population,
   }
   threads.clear();
 
+  // accumulate thread hits
+  toRet.hits = std::accumulate(threadHits.begin(), threadHits.end(), 0);
+
   // INFO: 3A) tournament selection (single threaded, just return indices)
   auto selRes = utils::tournamentSelection(errors, conf.tournamentSize);
 
-  auto bestIndiv = population[selRes.bestOverallIndex]->clone();
-
-  if (errors[selRes.bestOverallIndex] < overallLowestError) {
-    overallLowestError = errors[selRes.bestOverallIndex];
-    overallBestIndividual = population[selRes.bestOverallIndex]->clone();
+  // new fittest individual, update the values
+  if (errors[selRes.bestOverallIndex] < fittestErr) {
+    // clone out the new champion
+    fittestIndivdual = population[selRes.bestOverallIndex]->clone();
+    fittestErr = errors[selRes.bestOverallIndex];
   }
 
   // Create the next generation from the selected indices
@@ -264,14 +275,38 @@ void generation(vector<unique_ptr<Tree>>& population,
   }
   threads.clear();
 
-  // TODO: remove
+  // overwrite the worst individual with the best one
+  int replaceMe =
+      std::ranges::max_element(errors.begin(), errors.end()) - errors.begin();
+  population[replaceMe] = fittestIndivdual->clone();
 
-  // move the best individual into a random spot
-  population[Tree::getRandomInt(0, population.size() - 1)] = bestIndiv->clone();
+  // check if the stopping criteria has been met
+  cout << "testing best individual on the validation set: " << endl;
+
+  vector<int> bestHits(1);
+
+  evaluate(replaceMe, replaceMe + 1, population, validationInputs,
+	   validationTargets, validationErrors, conf, bestHits, 0);
+
+  // to test
+  if (validationErrors[replaceMe] <= conf.highestStoppingError) {
+    cout << "Stopping criteria reached..." << endl;
+    cout << "Best individual: " << endl;
+    cout << population[replaceMe]->toString(inputs[0]) << endl;
+    toRet.mustStop = true;
+  } else {
+    cout << "Not stopping, my error: " << validationErrors[replaceMe]
+	 << ", target err: " << conf.highestStoppingError << endl;
+  }
+
+  return toRet;
 }
 
 void generationTest(const vector<vector<double>>& inputs,
 		    const vector<double>& targets, vector<double>& errors,
+		    const vector<vector<double>>& validationInputs,
+		    const vector<double>& validationTargets,
+		    vector<double>& validationErrors,
 		    const GrowStrategy& growStrategy,
 		    vector<unique_ptr<Tree>>& population, Config& config) {
   cout << "Growing initial population..." << endl;
@@ -279,8 +314,8 @@ void generationTest(const vector<vector<double>>& inputs,
   growPopulation(population, config, growStrategy);
 
   // init best indivdual
-  std::unique_ptr<Tree> overallBestIndividual = population[0]->clone();
-  double overallLowestError = 100000;
+  auto fittestIndividual = population[0]->clone();
+  double fittestErr = 100000;
 
   cout << "Starting program..." << endl;
 
@@ -289,13 +324,29 @@ void generationTest(const vector<vector<double>>& inputs,
     cout << "----------------- GENERATION " << i << " -------------------------"
 	 << endl;
 
-    // call generation to continue after initial grow
-    generation(population, inputs, targets, errors, config,
-	       ErrorStrategy::MEAN_SQUARED_ERROR, overallBestIndividual,
-	       overallLowestError);
+    /*
+     *vector<unique_ptr<Tree>>& population,
+			 const vector<vector<double>>& inputs,
+			 const vector<double>& targets, vector<double>& errors,
+			 const vector<vector<double>>& validationInputs,
+			 const vector<double>& validationTargets,
+			 vector<double>& validationErrors, Config& conf,
+			 unique_ptr<Tree>& fittestIndivdual,
+			 double& fittestErr
+     */
 
-    cout << "BEST: " << overallBestIndividual->toString(inputs[2]) << "[ error "
-	 << overallLowestError << " ]" << endl;
+    // call generation to continue after initial grow
+    auto check =
+	generation(population, inputs, targets, errors, validationInputs,
+		   validationTargets, validationErrors, config,
+		   fittestIndividual, fittestErr);
+
+    cout << "hits: " << check.hits << endl;
+
+    if (check.mustStop) {
+      cout << "Exiting..." << endl;
+      break;
+    }
   }
 }
 
@@ -390,21 +441,19 @@ int main() {
   cout << "Num input vars: " << trainingInputs[0].size() << endl;
 
   // ----------------------------- CONFIG ----------------------- //
-  const int SEED = 5000;
-  Tree::engine.seed(SEED);
-
   GrowStrategy growStrategy = {
-      .minDepth = 2, .maxDepth = 5, .fullGrow = 50, .grow = 50};
+      .minDepth = 2, .maxDepth = 5, .fullGrow = 25, .grow = 25};
 
   const int POP_SIZE = (growStrategy.fullGrow + growStrategy.grow) *
 		       (growStrategy.maxDepth - growStrategy.minDepth + 1);
 
   Tree::highestConstant = 2;
   Tree::smallestConstant = -2;
+  Tree::seed = 2001;
 
   Config config = {.populationSize = POP_SIZE,
 		   .numThreads = 8,
-		   .generations = 300,
+		   .generations = 250,
 		   .chooseConstantProbability = 0.5,
 		   .tournamentSize = 3,
 		   .numVars = static_cast<int>(trainingInputs[0].size()),
@@ -413,7 +462,9 @@ int main() {
 		   .mutationRate = 0.35,
 		   .evaluationSampleSize = 100000,
 		   .tuneConstantProbability = 0.5,
-		   .parsimonyPressure = 0.00008};
+		   .parsimonyPressure = 0.00008,
+		   .highestStoppingError = 0.00999,
+		   .highestHitError = 0.015};
   // ------------------------------------------------------------ //
 
   chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
@@ -422,11 +473,15 @@ int main() {
   vector<unique_ptr<Tree>> population;
   population.resize(config.populationSize);
 
-  vector<double> tempErrors;
-  tempErrors.resize(config.populationSize);
+  vector<double> trainingErrors;
+  trainingErrors.resize(config.populationSize);
 
-  generationTest(trainingInputs, trainingTargets, tempErrors, growStrategy,
-		 population, config);
+  vector<double> validationErrors;
+  validationErrors.resize(config.populationSize);
+
+  generationTest(trainingInputs, trainingTargets, trainingErrors,
+		 validationInputs, validationTargets, validationErrors,
+		 growStrategy, population, config);
 
   chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
 
@@ -439,6 +494,8 @@ int main() {
   auto validationResults =
       validatePopulation(validationInputs, validationTargets, population);
 
+  cout << "Testing the fittest individual" << endl;
+
   cout << "-------------------- RESULTS ---------------------- " << endl;
   cout << "seed,bestMSE,worstMSE,medianMSE,avgMSE,stdDevMSE,smallestConstant,"
 	  "highestConstant,"
@@ -446,7 +503,7 @@ int main() {
 	  "prematureLeafProbability,mutationRate,crossoverRate,"
 	  "tuneConstantProbability,runtimeS"
        << endl;
-  cout << SEED << "," << validationResults.bestMSE << ","
+  cout << Tree::seed << "," << validationResults.bestMSE << ","
        << validationResults.worstMSE << "," << validationResults.medianMSE
        << "," << validationResults.avgMSE << "," << validationResults.stdDev
        << "," << Tree::smallestConstant << "," << Tree::highestConstant << ","

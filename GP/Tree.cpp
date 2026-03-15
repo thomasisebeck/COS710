@@ -11,13 +11,15 @@
 #include "Node.h"
 using namespace std;
 
-// init the random device
-std::mt19937 Tree::engine{std::random_device{}()};
-
-// TODO: test out which ones work with these
 int Tree::smallestConstant = -10;
 int Tree::highestConstant = 10;
 double Tree::tuneRange = 0.5;
+int Tree::seed = 1010;
+
+// init the random device
+thread_local std::mt19937 Tree::engine(Tree::seed);
+
+// TODO: test out which ones work with these
 
 using namespace std;
 

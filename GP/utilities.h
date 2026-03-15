@@ -36,6 +36,7 @@ void printTrees(vector<unique_ptr<Tree>>& population, vector<double>& inputs) {
 struct SelectionResult {
   vector<int> selectedIndices;
   size_t bestOverallIndex;
+  size_t worstOverallIndex;
 };
 
 SelectionResult tournamentSelection(const vector<double>& errors,
