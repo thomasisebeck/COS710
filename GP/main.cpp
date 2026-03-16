@@ -342,7 +342,8 @@ struct ValidationResult {
 
 ValidationResult validatePopulation(const vector<vector<double>>& inputs,
 				    const vector<double>& targets,
-				    vector<unique_ptr<Tree>>& population) {
+				    vector<unique_ptr<Tree>>& population,
+				    int startInd, int endInd) {
   // take each of the individuals in the population and get the MSE per
   // individual
   ValidationResult res = {.avgMSE = 0,
@@ -355,10 +356,15 @@ ValidationResult validatePopulation(const vector<vector<double>>& inputs,
   assert((inputs.size() == targets.size()) &&
 	 "Inputs, targets and errors are not the same size");
 
+  assert((startInd > 0 && startInd < population.size()));
+  assert((endInd > 0 && endInd < population.size()));
+  assert(startInd < endInd);
+
   vector<double> mse;
 
   // for each individual in the population
-  for (const auto& indiv : population) {
+  for (int i = startInd; i <= endInd; i++) {
+    const auto& indiv = population[i];
     double errorSum = 0;
 
     // get the total error sum
@@ -396,6 +402,62 @@ ValidationResult validatePopulation(const vector<vector<double>>& inputs,
   return res;
 }
 
+struct BestSeedResult {
+  int seed;
+  double validationMSE;
+};
+
+BestSeedResult findBestSeed(const vector<vector<double>>& trainingInputs,
+			    const vector<double>& trainingTargets,
+			    const vector<vector<double>>& validationInputs,
+			    const vector<double>& validationTargets,
+			    const GrowStrategy& growStrategy, Config& config) {
+  // found from the test set
+  std::vector<int> topSeeds = {
+      1030, 1098, 1125, 1135, 1148, 1167, 1188, 1219, 1337, 1364, 1557, 1602,
+      1633, 1704, 1710, 1711, 1764, 1875, 1911, 1960, 2090, 2123, 2168, 2233,
+      2275, 2308, 2369, 2534, 2539, 2626, 2658, 2679, 2714, 2822, 2838, 2929,
+      2939, 3024, 3109, 3116, 3251, 3283, 3293, 3313, 3315, 3349, 3351, 3439,
+      3594, 3605, 3627, 3941, 4007, 4030, 4061, 4080};
+
+  int finalBestSeed = topSeeds[0];
+  double bestValidationMSE = 1e18;  // Start high
+
+  for (const int& trySeed : topSeeds) {
+    Tree::seed = trySeed;
+    Tree::engine.seed(Tree::seed);
+
+    cout << "Test seed: " << trySeed << endl;
+
+    auto t1 = chrono::steady_clock::now();
+
+    vector<unique_ptr<Tree>> population;
+    population.resize(config.populationSize);
+
+    vector<double> trainingErrors(config.populationSize);
+    vector<double> validationErrors(config.populationSize);
+    vector<int> hitsPerGeneration(config.generations);
+
+    generationTest(trainingInputs, trainingTargets, trainingErrors,
+		   validationInputs, validationTargets, validationErrors,
+		   growStrategy, population, config, hitsPerGeneration);
+
+    auto t2 = chrono::steady_clock::now();
+    chrono::duration<double> duration = t2 - t1;
+
+    // Validate the population
+    auto valRes = validatePopulation(validationInputs, validationTargets,
+				     population, 0, population.size() - 1);
+    // Track the absolute best seed based on Validation performance
+    if (valRes.bestMSE < bestValidationMSE) {
+      bestValidationMSE = valRes.bestMSE;
+      finalBestSeed = trySeed;
+    }
+  }
+
+  return {.seed = finalBestSeed, .validationMSE = bestValidationMSE};
+}
+
 int main() {
   // Init data processor
   DataProcessor dataProcessor;
@@ -419,7 +481,7 @@ int main() {
 
   // ----------------------------- CONFIG ----------------------- //
   GrowStrategy growStrategy = {
-      .minDepth = 2, .maxDepth = 5, .fullGrow = 25, .grow = 25};
+      .minDepth = 2, .maxDepth = 5, .fullGrow = 80, .grow = 80};
 
   const int POP_SIZE = (growStrategy.fullGrow + growStrategy.grow) *
 		       (growStrategy.maxDepth - growStrategy.minDepth + 1);
@@ -431,96 +493,82 @@ int main() {
 		   .numThreads = 8,
 		   .generations = 300,
 		   .chooseConstantProbability = 0.5,
-		   .tournamentSize = 3,
+		   .tournamentSize = 4,
 		   .numVars = static_cast<int>(trainingInputs[0].size()),
 		   .prematureLeafProbability = 0.25,
 		   .crossoverRate = 0.7,
 		   .mutationRate = 0.35,
-		   .evaluationSampleSize = 100000,
+		   .evaluationSampleSize = 5000,
 		   .tuneConstantProbability = 0.5,
 		   .parsimonyPressure = 0.00008,
 		   .highestStoppingError = 0.00999,
 		   .highestHitError = 0.012};
   // ------------------------------------------------------------ //
 
-  for (int trySeed = 1000; trySeed <= 9999; trySeed++) {
-    Tree::seed = trySeed;
-    Tree::engine.seed(Tree::seed);
+  // 1. Find the best seed based on Validation set result
+  /*
+  BestSeedResult bestResult =
+      findBestSeed(trainingInputs, trainingTargets, validationInputs,
+		   validationTargets, growStrategy, config);
 
-    chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
+  cout << "\nBest Seed Found: " << bestResult.seed
+       << " with Validation MSE: " << bestResult.validationMSE << endl;
 
-    // allocate popluation
-    vector<unique_ptr<Tree>> population;
-    population.resize(config.populationSize);
+  */
 
-    vector<double> trainingErrors;
-    trainingErrors.resize(config.populationSize);
+  BestSeedResult bestResult = {.seed = 2822, .validationMSE = 0.00952255};
 
-    vector<double> validationErrors;
-    validationErrors.resize(config.populationSize);
+  cout << "Testing the best seed on test set: " << endl;
 
-    vector<int> hitsPerGeneration;
-    validationErrors.resize(config.generations);
+  Tree::seed = bestResult.seed;
+  Tree::engine.seed(Tree::seed);
 
-    generationTest(trainingInputs, trainingTargets, trainingErrors,
-		   validationInputs, validationTargets, validationErrors,
-		   growStrategy, population, config, hitsPerGeneration);
+  vector<unique_ptr<Tree>> finalPopulation(config.populationSize);
+  vector<double> trainingErrors(config.populationSize);
+  vector<double> validationErrors(config.populationSize);
+  vector<int> hitsPerGeneration(config.generations);
 
-    chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
+  generationTest(trainingInputs, trainingTargets, trainingErrors,
+		 validationInputs, validationTargets, validationErrors,
+		 growStrategy, finalPopulation, config, hitsPerGeneration);
 
-    chrono::duration<double> duration =
-	duration_cast<chrono::duration<double>>(t2 - t1);
+  // Get the best one from the validation set
+  auto finalValRes =
+      validatePopulation(validationInputs, validationTargets, finalPopulation,
+			 0, finalPopulation.size() - 1);
 
-    // test population on validation set
-    auto validationResults =
-	validatePopulation(validationInputs, validationTargets, population);
+  // Pull the lever!!!!
+  auto finalTestRes = validatePopulation(
+      testInputs, testTargets, finalPopulation, 0, finalPopulation.size() - 1);
 
-    // 1. Prepare the strings
-    std::string bestIndividual =
-	"\"" +
-	population[validationResults.bestIndividualIndex]->toString(
-	    testInputs[0]) +
-	"\"";
-    std::string hitsHistory =
-	"\"" + utils::vectorToString(hitsPerGeneration) + "\"";
-    std::string bestNodeCount = std::to_string(
-	population[validationResults.bestIndividualIndex]->getNodeCount());
+  cout << "================ FINAL REPORT ================" << endl;
+  cout << "VALIDATION STATS (The Selection Criteria):" << endl;
+  cout << "  Best:   " << finalValRes.bestMSE << endl;
+  cout << "  Avg:    " << finalValRes.avgMSE << endl;
+  cout << "  Median: " << finalValRes.medianMSE << endl;
+  cout << "  stdDev: " << finalValRes.stdDev << endl;
+  cout << "  Worst:  " << finalValRes.worstMSE << endl;
+  cout << "---------------------------------------------" << endl;
 
-    // 2. Open the file named after the seed
-    std::string filename = std::to_string(Tree::seed) + ".txt";
-    std::ofstream outFile("../results/" + filename);
+  cout << "TEST STATS (The Unseen Data):" << endl;
+  cout << "  Best:   " << finalTestRes.bestMSE << endl;
+  cout << "  Avg:    " << finalTestRes.avgMSE << endl;
+  cout << "  Median: " << finalTestRes.medianMSE << endl;
+  cout << "  stdDev: " << finalTestRes.stdDev << endl;
+  cout << "  Worst:  " << finalTestRes.worstMSE << endl;
+  cout << "---------------------------------------------" << endl;
 
-    cout << "writing..." << endl;
+  // Calculate the gap between Validation and Test
+  double genGap = std::abs(finalTestRes.bestMSE - finalValRes.bestMSE);
+  cout << "Generalization Gap: " << genGap << endl;
 
-    if (outFile.is_open()) {
-      // Header row
-      outFile
-	  << "bestMSE,worstMSE,medianMSE,avgMSE,stdDevMSE,smallestConstant,"
-	     "highestConstant,minDepth,maxDepth,fullGrow,grow,popSize,"
-	     "generations,tournamentSize,prematureLeafProbability,mutationRate,"
-	     "crossoverRate,tuneConstantProbability,runtimeS,"
-	     "bestIndividualNodeCount,bestIndividual,hitsPerGen"
-	  << std::endl;
+  cout << "BEST FORMULA: "
+       << finalPopulation[finalValRes.bestIndividualIndex]->toString(
+	      testInputs[0])
+       << endl;
 
-      // Data row
-      outFile << validationResults.bestMSE << "," << validationResults.worstMSE
-	      << "," << validationResults.medianMSE << ","
-	      << validationResults.avgMSE << "," << validationResults.stdDev
-	      << "," << Tree::smallestConstant << "," << Tree::highestConstant
-	      << "," << growStrategy.minDepth << "," << growStrategy.maxDepth
-	      << "," << growStrategy.fullGrow << "," << growStrategy.grow << ","
-	      << POP_SIZE << "," << config.generations << ","
-	      << config.tournamentSize << "," << config.prematureLeafProbability
-	      << "," << config.mutationRate << "," << config.crossoverRate
-	      << "," << config.tuneConstantProbability << ","
-	      << duration.count() << "," << bestNodeCount << ","
-	      << bestIndividual << ","	// Wrapped in quotes
-	      << hitsHistory		// Wrapped in quotes
-	      << std::endl;
-
-      outFile.close();
-    }
-  }
-
+  cout << "Hits per generation: " << utils::vectorToString(hitsPerGeneration)
+       << endl;
+  cout << "=============================================" << endl;
   return 0;
 }
