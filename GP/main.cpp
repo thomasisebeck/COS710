@@ -1,6 +1,8 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -17,6 +19,7 @@
 #include "utilities.h"
 
 using namespace std;
+namespace fs = std::filesystem;
 
 enum class Action { GROW, EVALUATE, PRINT };
 
@@ -280,9 +283,6 @@ GenerationRet generation(vector<unique_ptr<Tree>>& population,
       std::ranges::max_element(errors.begin(), errors.end()) - errors.begin();
   population[replaceMe] = fittestIndivdual->clone();
 
-  // check if the stopping criteria has been met
-  cout << "testing best individual on the validation set: " << endl;
-
   vector<int> bestHits(1);
 
   evaluate(replaceMe, replaceMe + 1, population, validationInputs,
@@ -294,11 +294,8 @@ GenerationRet generation(vector<unique_ptr<Tree>>& population,
     cout << "Best individual: " << endl;
     cout << population[replaceMe]->toString(inputs[0]) << endl;
     toRet.mustStop = true;
-  } else {
-    cout << "Not stopping, my error: " << validationErrors[replaceMe]
-	 << ", target err: " << conf.highestStoppingError << endl;
   }
-
+  // don't stop
   return toRet;
 }
 
@@ -308,8 +305,8 @@ void generationTest(const vector<vector<double>>& inputs,
 		    const vector<double>& validationTargets,
 		    vector<double>& validationErrors,
 		    const GrowStrategy& growStrategy,
-		    vector<unique_ptr<Tree>>& population, Config& config) {
-  cout << "Growing initial population..." << endl;
+		    vector<unique_ptr<Tree>>& population, Config& config,
+		    vector<int>& hitsPerGerenation) {
   // grow initial population
   growPopulation(population, config, growStrategy);
 
@@ -317,31 +314,15 @@ void generationTest(const vector<vector<double>>& inputs,
   auto fittestIndividual = population[0]->clone();
   double fittestErr = 100000;
 
-  cout << "Starting program..." << endl;
-
   // evolve through generations
-  for (int i = 1; i <= config.generations; i++) {
-    cout << "----------------- GENERATION " << i << " -------------------------"
-	 << endl;
-
-    /*
-     *vector<unique_ptr<Tree>>& population,
-			 const vector<vector<double>>& inputs,
-			 const vector<double>& targets, vector<double>& errors,
-			 const vector<vector<double>>& validationInputs,
-			 const vector<double>& validationTargets,
-			 vector<double>& validationErrors, Config& conf,
-			 unique_ptr<Tree>& fittestIndivdual,
-			 double& fittestErr
-     */
-
+  for (int i = 0; i < config.generations; i++) {
     // call generation to continue after initial grow
     auto check =
 	generation(population, inputs, targets, errors, validationInputs,
 		   validationTargets, validationErrors, config,
 		   fittestIndividual, fittestErr);
 
-    cout << "hits: " << check.hits << endl;
+    hitsPerGerenation.push_back(check.hits);
 
     if (check.mustStop) {
       cout << "Exiting..." << endl;
@@ -416,7 +397,6 @@ ValidationResult validatePopulation(const vector<vector<double>>& inputs,
 }
 
 int main() {
-  cout << "Reading csv..." << endl;
   // Init data processor
   DataProcessor dataProcessor;
 
@@ -424,21 +404,18 @@ int main() {
   vector<vector<double>> trainingInputs = dataProcessor.getInputs();
   vector<double> trainingTargets = dataProcessor.getTargets();
 
-  cout << "Done training..." << endl;
-
   dataProcessor.readCSV("./dataset/validation.csv");
   vector<vector<double>> validationInputs = dataProcessor.getInputs();
   vector<double> validationTargets = dataProcessor.getTargets();
-
-  cout << "Done validation..." << endl;
 
   dataProcessor.readCSV("./dataset/test.csv");
   vector<vector<double>> testInputs = dataProcessor.getInputs();
   vector<double> testTargets = dataProcessor.getTargets();
 
-  cout << "Done ..." << endl;
-
-  cout << "Num input vars: " << trainingInputs[0].size() << endl;
+  if (!fs::exists("../results")) {
+    cout << "creating results dir..." << endl;
+    fs::create_directories("../results");
+  }
 
   // ----------------------------- CONFIG ----------------------- //
   GrowStrategy growStrategy = {
@@ -449,11 +426,10 @@ int main() {
 
   Tree::highestConstant = 2;
   Tree::smallestConstant = -2;
-  Tree::seed = 2001;
 
   Config config = {.populationSize = POP_SIZE,
 		   .numThreads = 8,
-		   .generations = 250,
+		   .generations = 300,
 		   .chooseConstantProbability = 0.5,
 		   .tournamentSize = 3,
 		   .numVars = static_cast<int>(trainingInputs[0].size()),
@@ -464,60 +440,87 @@ int main() {
 		   .tuneConstantProbability = 0.5,
 		   .parsimonyPressure = 0.00008,
 		   .highestStoppingError = 0.00999,
-		   .highestHitError = 0.015};
+		   .highestHitError = 0.012};
   // ------------------------------------------------------------ //
 
-  chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
+  for (int trySeed = 1000; trySeed <= 9999; trySeed++) {
+    Tree::seed = trySeed;
+    Tree::engine.seed(Tree::seed);
 
-  // allocate popluation
-  vector<unique_ptr<Tree>> population;
-  population.resize(config.populationSize);
+    chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
 
-  vector<double> trainingErrors;
-  trainingErrors.resize(config.populationSize);
+    // allocate popluation
+    vector<unique_ptr<Tree>> population;
+    population.resize(config.populationSize);
 
-  vector<double> validationErrors;
-  validationErrors.resize(config.populationSize);
+    vector<double> trainingErrors;
+    trainingErrors.resize(config.populationSize);
 
-  generationTest(trainingInputs, trainingTargets, trainingErrors,
-		 validationInputs, validationTargets, validationErrors,
-		 growStrategy, population, config);
+    vector<double> validationErrors;
+    validationErrors.resize(config.populationSize);
 
-  chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
+    vector<int> hitsPerGeneration;
+    validationErrors.resize(config.generations);
 
-  chrono::duration<double> duration =
-      duration_cast<chrono::duration<double>>(t2 - t1);
+    generationTest(trainingInputs, trainingTargets, trainingErrors,
+		   validationInputs, validationTargets, validationErrors,
+		   growStrategy, population, config, hitsPerGeneration);
 
-  cout << "Calculating results..." << endl;
+    chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
 
-  // test population on validation set
-  auto validationResults =
-      validatePopulation(validationInputs, validationTargets, population);
+    chrono::duration<double> duration =
+	duration_cast<chrono::duration<double>>(t2 - t1);
 
-  cout << "Testing the fittest individual" << endl;
+    // test population on validation set
+    auto validationResults =
+	validatePopulation(validationInputs, validationTargets, population);
 
-  cout << "-------------------- RESULTS ---------------------- " << endl;
-  cout << "seed,bestMSE,worstMSE,medianMSE,avgMSE,stdDevMSE,smallestConstant,"
-	  "highestConstant,"
-	  "minDepth,maxDepth,fullGrow,grow,popSize,generations,tournamentSize,"
-	  "prematureLeafProbability,mutationRate,crossoverRate,"
-	  "tuneConstantProbability,runtimeS"
-       << endl;
-  cout << Tree::seed << "," << validationResults.bestMSE << ","
-       << validationResults.worstMSE << "," << validationResults.medianMSE
-       << "," << validationResults.avgMSE << "," << validationResults.stdDev
-       << "," << Tree::smallestConstant << "," << Tree::highestConstant << ","
-       << growStrategy.minDepth << "," << growStrategy.maxDepth << ","
-       << growStrategy.fullGrow << "," << growStrategy.grow << "," << POP_SIZE
-       << "," << config.generations << "," << config.tournamentSize << ","
-       << config.prematureLeafProbability << "," << config.mutationRate << ","
-       << config.crossoverRate << "," << config.tuneConstantProbability << ","
-       << duration.count() << endl;
-  cout << "BEST INDIVIDUAL: "
-       << population[validationResults.bestIndividualIndex]->toString(
-	      testInputs[0])
-       << endl;
-  cout << "--------------------------------------------------- " << endl;
+    // 1. Prepare the strings
+    std::string bestIndividual =
+	"\"" +
+	population[validationResults.bestIndividualIndex]->toString(
+	    testInputs[0]) +
+	"\"";
+    std::string hitsHistory =
+	"\"" + utils::vectorToString(hitsPerGeneration) + "\"";
+    std::string bestNodeCount = std::to_string(
+	population[validationResults.bestIndividualIndex]->getNodeCount());
+
+    // 2. Open the file named after the seed
+    std::string filename = std::to_string(Tree::seed) + ".txt";
+    std::ofstream outFile("../results/" + filename);
+
+    cout << "writing..." << endl;
+
+    if (outFile.is_open()) {
+      // Header row
+      outFile
+	  << "bestMSE,worstMSE,medianMSE,avgMSE,stdDevMSE,smallestConstant,"
+	     "highestConstant,minDepth,maxDepth,fullGrow,grow,popSize,"
+	     "generations,tournamentSize,prematureLeafProbability,mutationRate,"
+	     "crossoverRate,tuneConstantProbability,runtimeS,"
+	     "bestIndividualNodeCount,bestIndividual,hitsPerGen"
+	  << std::endl;
+
+      // Data row
+      outFile << validationResults.bestMSE << "," << validationResults.worstMSE
+	      << "," << validationResults.medianMSE << ","
+	      << validationResults.avgMSE << "," << validationResults.stdDev
+	      << "," << Tree::smallestConstant << "," << Tree::highestConstant
+	      << "," << growStrategy.minDepth << "," << growStrategy.maxDepth
+	      << "," << growStrategy.fullGrow << "," << growStrategy.grow << ","
+	      << POP_SIZE << "," << config.generations << ","
+	      << config.tournamentSize << "," << config.prematureLeafProbability
+	      << "," << config.mutationRate << "," << config.crossoverRate
+	      << "," << config.tuneConstantProbability << ","
+	      << duration.count() << "," << bestNodeCount << ","
+	      << bestIndividual << ","	// Wrapped in quotes
+	      << hitsHistory		// Wrapped in quotes
+	      << std::endl;
+
+      outFile.close();
+    }
+  }
 
   return 0;
 }
