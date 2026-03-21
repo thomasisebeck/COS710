@@ -27,19 +27,19 @@ enum ErrorStrategy { MEAN_SQUARED_ERROR };
 
 enum class TreeType { FULL_GROW, GROW };
 
-void grow(int startInd, int endIndExclusive, vector<Tree*>& population,
-	  int depth, int numVars, double chooseConstantProbability,
-	  TreeType type, double prematureLeafProbability,
-	  double tuneConstantProbability) {
+void grow(int startInd, int endIndExclusive, vector<Tree *> &population,
+          int depth, int numVars, double chooseConstantProbability,
+          TreeType type, double prematureLeafProbability,
+          double tuneConstantProbability) {
   // do the action on all the indices
   for (int i = startInd; i < endIndExclusive; i++) {
     if (type == TreeType::FULL_GROW) {
       population[i] = new FullGrowTree(
-	  depth, numVars, chooseConstantProbability, tuneConstantProbability);
+          depth, numVars, chooseConstantProbability, tuneConstantProbability);
     } else {
       population[i] =
-	  new GrowTree(depth, numVars, chooseConstantProbability,
-		       prematureLeafProbability, tuneConstantProbability);
+          new GrowTree(depth, numVars, chooseConstantProbability,
+                       prematureLeafProbability, tuneConstantProbability);
     }
 
     population[i]->grow();
@@ -71,11 +71,11 @@ struct Config {
 // a 1d vector storing the values of the
 // evaluations
 void evaluate(int startInd, int endIndExclusive,
-	      vector<unique_ptr<Tree>>& population,
-	      const vector<vector<double>>& inputs,
-	      const vector<double>& targets, vector<double>& errors,
-	      const Config& conf, vector<int>& threadHits,
-	      const int& threadHitIndex) {
+              vector<unique_ptr<Tree>> &population,
+              const vector<vector<double>> &inputs,
+              const vector<double> &targets, vector<double> &errors,
+              const Config &conf, vector<int> &threadHits,
+              const int &threadHitIndex) {
   assert(inputs.size() == targets.size() && "targets inputs size mismatch");
 
   threadHits[threadHitIndex] = 0;
@@ -97,7 +97,7 @@ void evaluate(int startInd, int endIndExclusive,
 
     // loop through all the targets
     for (size_t currTargetInd = 0; currTargetInd < conf.evaluationSampleSize;
-	 currTargetInd++) {
+         currTargetInd++) {
       int select = evaluationSampleIndices[currTargetInd];
       double value = population[popInd]->evaluate(inputs[select]);
       double currError = value - targets[select];
@@ -107,10 +107,11 @@ void evaluate(int startInd, int endIndExclusive,
     }
 
     errors[popInd] =
-	(errorSum / conf.evaluationSampleSize) +
-	(population[popInd]->getNodeCount() * conf.parsimonyPressure);
+        (errorSum / conf.evaluationSampleSize) +
+        (population[popInd]->getNodeCount() * conf.parsimonyPressure);
 
-    if (errors[popInd] < conf.highestHitError) threadHits[threadHitIndex]++;
+    if (errors[popInd] < conf.highestHitError)
+      threadHits[threadHitIndex]++;
   }
 }
 
@@ -121,8 +122,8 @@ struct GrowStrategy {
   int grow;
 };
 
-void mutatePopulation(vector<unique_ptr<Tree>>& population, const Config& conf,
-		      int startInd, int endIndExclusive) {
+void mutatePopulation(vector<unique_ptr<Tree>> &population, const Config &conf,
+                      int startInd, int endIndExclusive) {
   for (int i = startInd; i < endIndExclusive; i++) {
     if (Tree::getRandomDouble(0, 1) < conf.mutationRate) {
       population[i]->mutate();
@@ -131,8 +132,8 @@ void mutatePopulation(vector<unique_ptr<Tree>>& population, const Config& conf,
 }
 
 // WARN: call single threaded
-void growPopulation(vector<unique_ptr<Tree>>& population, Config& conf,
-		    const GrowStrategy& growStrategy) {
+void growPopulation(vector<unique_ptr<Tree>> &population, Config &conf,
+                    const GrowStrategy &growStrategy) {
   int index = 0;
 
   // loop through the min and max depths
@@ -141,10 +142,10 @@ void growPopulation(vector<unique_ptr<Tree>>& population, Config& conf,
     // grow all the fullgrow trees
     for (int f = 0; f < growStrategy.fullGrow; f++) {
       assert(index < population.size() &&
-	     "Population index out of bounds for fullgrow");
+             "Population index out of bounds for fullgrow");
       population[index] = make_unique<FullGrowTree>(
-	  depth, conf.numVars, conf.chooseConstantProbability,
-	  conf.tuneConstantProbability);
+          depth, conf.numVars, conf.chooseConstantProbability,
+          conf.tuneConstantProbability);
 
       population[index++]->grow();
     }
@@ -152,11 +153,11 @@ void growPopulation(vector<unique_ptr<Tree>>& population, Config& conf,
     // grow all the grow trees
     for (int g = 0; g < growStrategy.grow; g++) {
       assert(index < population.size() &&
-	     "Population index out of bounds for grow");
+             "Population index out of bounds for grow");
 
       population[index] = make_unique<GrowTree>(
-	  depth, conf.numVars, conf.chooseConstantProbability,
-	  conf.prematureLeafProbability, conf.tuneConstantProbability);
+          depth, conf.numVars, conf.chooseConstantProbability,
+          conf.prematureLeafProbability, conf.tuneConstantProbability);
 
       population[index++]->grow();
     }
@@ -179,16 +180,16 @@ struct GenerationRet {
 };
 
 // assumes that the initial trees are already grown
-GenerationRet generation(vector<unique_ptr<Tree>>& population,
-			 const vector<vector<double>>& inputs,
-			 const vector<double>& targets, vector<double>& errors,
-			 const vector<vector<double>>& validationInputs,
-			 const vector<double>& validationTargets,
-			 vector<double>& validationErrors, Config& conf,
-			 unique_ptr<Tree>& fittestIndivdual,
-			 double& fittestErr) {
+GenerationRet generation(vector<unique_ptr<Tree>> &population,
+                         const vector<vector<double>> &inputs,
+                         const vector<double> &targets, vector<double> &errors,
+                         const vector<vector<double>> &validationInputs,
+                         const vector<double> &validationTargets,
+                         vector<double> &validationErrors, Config &conf,
+                         unique_ptr<Tree> &fittestIndivdual,
+                         double &fittestErr) {
   assert(population.size() % 2 == 0 &&
-	 "Population size must be divisible by 2");
+         "Population size must be divisible by 2");
 
   GenerationRet toRet = {.mustStop = false, .hits = 0};
 
@@ -207,12 +208,12 @@ GenerationRet generation(vector<unique_ptr<Tree>>& population,
     auto [start, end] = indices[i];
 
     threads.emplace_back(&evaluate, start, end, ref(population), cref(inputs),
-			 cref(targets), ref(errors), cref(conf),
-			 ref(threadHits), i);
+                         cref(targets), ref(errors), cref(conf),
+                         ref(threadHits), i);
   }
 
   // INFO: 2B) join
-  for (auto& currThread : threads) {
+  for (auto &currThread : threads) {
     currThread.join();
   }
   threads.clear();
@@ -253,7 +254,7 @@ GenerationRet generation(vector<unique_ptr<Tree>>& population,
   }
 
   assert(nextGeneration.size() == population.size() &&
-	 "Next generation and population are different sizes");
+         "Next generation and population are different sizes");
 
   // replace my generation now with the next one
   population.swap(nextGeneration);
@@ -273,7 +274,7 @@ GenerationRet generation(vector<unique_ptr<Tree>>& population,
   }
 
   // INFO: 4B) join
-  for (auto& currThread : threads) {
+  for (auto &currThread : threads) {
     currThread.join();
   }
   threads.clear();
@@ -286,7 +287,7 @@ GenerationRet generation(vector<unique_ptr<Tree>>& population,
   vector<int> bestHits(1);
 
   evaluate(replaceMe, replaceMe + 1, population, validationInputs,
-	   validationTargets, validationErrors, conf, bestHits, 0);
+           validationTargets, validationErrors, conf, bestHits, 0);
 
   // to test
   if (validationErrors[replaceMe] <= conf.highestStoppingError) {
@@ -299,14 +300,14 @@ GenerationRet generation(vector<unique_ptr<Tree>>& population,
   return toRet;
 }
 
-void generationTest(const vector<vector<double>>& inputs,
-		    const vector<double>& targets, vector<double>& errors,
-		    const vector<vector<double>>& validationInputs,
-		    const vector<double>& validationTargets,
-		    vector<double>& validationErrors,
-		    const GrowStrategy& growStrategy,
-		    vector<unique_ptr<Tree>>& population, Config& config,
-		    vector<int>& hitsPerGerenation) {
+void generationTest(const vector<vector<double>> &inputs,
+                    const vector<double> &targets, vector<double> &errors,
+                    const vector<vector<double>> &validationInputs,
+                    const vector<double> &validationTargets,
+                    vector<double> &validationErrors,
+                    const GrowStrategy &growStrategy,
+                    vector<unique_ptr<Tree>> &population, Config &config,
+                    vector<int> &hitsPerGerenation) {
   // grow initial population
   growPopulation(population, config, growStrategy);
 
@@ -318,9 +319,9 @@ void generationTest(const vector<vector<double>>& inputs,
   for (int i = 0; i < config.generations; i++) {
     // call generation to continue after initial grow
     auto check =
-	generation(population, inputs, targets, errors, validationInputs,
-		   validationTargets, validationErrors, config,
-		   fittestIndividual, fittestErr);
+        generation(population, inputs, targets, errors, validationInputs,
+                   validationTargets, validationErrors, config,
+                   fittestIndividual, fittestErr);
 
     hitsPerGerenation.push_back(check.hits);
 
@@ -340,23 +341,23 @@ struct ValidationResult {
   int bestIndividualIndex;
 };
 
-ValidationResult validatePopulation(const vector<vector<double>>& inputs,
-				    const vector<double>& targets,
-				    vector<unique_ptr<Tree>>& population,
-				    int startInd, int endInd) {
+ValidationResult validatePopulation(const vector<vector<double>> &inputs,
+                                    const vector<double> &targets,
+                                    vector<unique_ptr<Tree>> &population,
+                                    int startInd, int endInd) {
   // take each of the individuals in the population and get the MSE per
   // individual
   ValidationResult res = {.avgMSE = 0,
-			  .bestMSE = 10000000,
-			  .worstMSE = 0,
-			  .stdDev = 0,
-			  .medianMSE = 0,
-			  .bestIndividualIndex = 0};
+                          .bestMSE = 10000000,
+                          .worstMSE = 0,
+                          .stdDev = 0,
+                          .medianMSE = 0,
+                          .bestIndividualIndex = 0};
 
   assert((inputs.size() == targets.size()) &&
-	 "Inputs, targets and errors are not the same size");
+         "Inputs, targets and errors are not the same size");
 
-  assert((startInd > 0 && startInd < population.size()));
+  assert((startInd >= 0 && startInd < population.size()));
   assert((endInd > 0 && endInd < population.size()));
   assert(startInd < endInd);
 
@@ -364,7 +365,7 @@ ValidationResult validatePopulation(const vector<vector<double>>& inputs,
 
   // for each individual in the population
   for (int i = startInd; i <= endInd; i++) {
-    const auto& indiv = population[i];
+    const auto &indiv = population[i];
     double errorSum = 0;
 
     // get the total error sum
@@ -382,12 +383,13 @@ ValidationResult validatePopulation(const vector<vector<double>>& inputs,
 
   // get the average, best and worst
   for (size_t i = 0; i < mse.size(); ++i) {
-    const auto& err = mse[i];
+    const auto &err = mse[i];
     if (err < res.bestMSE) {
       res.bestMSE = err;
       res.bestIndividualIndex = i;
     }
-    if (err > res.worstMSE) res.worstMSE = err;
+    if (err > res.worstMSE)
+      res.worstMSE = err;
     totalError += err;
   }
 
@@ -407,11 +409,11 @@ struct BestSeedResult {
   double validationMSE;
 };
 
-BestSeedResult findBestSeed(const vector<vector<double>>& trainingInputs,
-			    const vector<double>& trainingTargets,
-			    const vector<vector<double>>& validationInputs,
-			    const vector<double>& validationTargets,
-			    const GrowStrategy& growStrategy, Config& config) {
+BestSeedResult findBestSeed(const vector<vector<double>> &trainingInputs,
+                            const vector<double> &trainingTargets,
+                            const vector<vector<double>> &validationInputs,
+                            const vector<double> &validationTargets,
+                            const GrowStrategy &growStrategy, Config &config) {
   // found from the test set
   std::vector<int> topSeeds = {
       1030, 1098, 1125, 1135, 1148, 1167, 1188, 1219, 1337, 1364, 1557, 1602,
@@ -421,15 +423,13 @@ BestSeedResult findBestSeed(const vector<vector<double>>& trainingInputs,
       3594, 3605, 3627, 3941, 4007, 4030, 4061, 4080};
 
   int finalBestSeed = topSeeds[0];
-  double bestValidationMSE = 1e18;  // Start high
+  double bestValidationMSE = 1e18; // Start high
 
-  for (const int& trySeed : topSeeds) {
+  for (const int &trySeed : topSeeds) {
     Tree::seed = trySeed;
     Tree::engine.seed(Tree::seed);
 
     cout << "Test seed: " << trySeed << endl;
-
-    auto t1 = chrono::steady_clock::now();
 
     vector<unique_ptr<Tree>> population;
     population.resize(config.populationSize);
@@ -439,15 +439,12 @@ BestSeedResult findBestSeed(const vector<vector<double>>& trainingInputs,
     vector<int> hitsPerGeneration(config.generations);
 
     generationTest(trainingInputs, trainingTargets, trainingErrors,
-		   validationInputs, validationTargets, validationErrors,
-		   growStrategy, population, config, hitsPerGeneration);
-
-    auto t2 = chrono::steady_clock::now();
-    chrono::duration<double> duration = t2 - t1;
+                   validationInputs, validationTargets, validationErrors,
+                   growStrategy, population, config, hitsPerGeneration);
 
     // Validate the population
     auto valRes = validatePopulation(validationInputs, validationTargets,
-				     population, 0, population.size() - 1);
+                                     population, 0, population.size() - 1);
     // Track the absolute best seed based on Validation performance
     if (valRes.bestMSE < bestValidationMSE) {
       bestValidationMSE = valRes.bestMSE;
@@ -459,6 +456,9 @@ BestSeedResult findBestSeed(const vector<vector<double>>& trainingInputs,
 }
 
 int main() {
+
+  auto t1 = chrono::steady_clock::now();
+
   // Init data processor
   DataProcessor dataProcessor;
 
@@ -481,42 +481,41 @@ int main() {
 
   // ----------------------------- CONFIG ----------------------- //
   GrowStrategy growStrategy = {
-      .minDepth = 2, .maxDepth = 5, .fullGrow = 80, .grow = 80};
+      .minDepth = 2, .maxDepth = 5, .fullGrow = 10, .grow = 10};
 
   const int POP_SIZE = (growStrategy.fullGrow + growStrategy.grow) *
-		       (growStrategy.maxDepth - growStrategy.minDepth + 1);
+                       (growStrategy.maxDepth - growStrategy.minDepth + 1);
 
   Tree::highestConstant = 2;
   Tree::smallestConstant = -2;
 
   Config config = {.populationSize = POP_SIZE,
-		   .numThreads = 8,
-		   .generations = 300,
-		   .chooseConstantProbability = 0.5,
-		   .tournamentSize = 4,
-		   .numVars = static_cast<int>(trainingInputs[0].size()),
-		   .prematureLeafProbability = 0.25,
-		   .crossoverRate = 0.7,
-		   .mutationRate = 0.35,
-		   .evaluationSampleSize = 5000,
-		   .tuneConstantProbability = 0.5,
-		   .parsimonyPressure = 0.00008,
-		   .highestStoppingError = 0.00999,
-		   .highestHitError = 0.012};
+                   .numThreads = 8,
+                   .generations = 50,
+                   .chooseConstantProbability = 0.5,
+                   .tournamentSize = 4,
+                   .numVars = static_cast<int>(trainingInputs[0].size()),
+                   .prematureLeafProbability = 0.25,
+                   .crossoverRate = 0.7,
+                   .mutationRate = 0.35,
+                   .evaluationSampleSize = 1000,
+                   .tuneConstantProbability = 0.5,
+                   .parsimonyPressure = 0.00008,
+                   .highestStoppingError = 0.00999,
+                   .highestHitError = 0.012};
   // ------------------------------------------------------------ //
 
   // 1. Find the best seed based on Validation set result
-  /*
   BestSeedResult bestResult =
       findBestSeed(trainingInputs, trainingTargets, validationInputs,
-		   validationTargets, growStrategy, config);
+                   validationTargets, growStrategy, config);
 
   cout << "\nBest Seed Found: " << bestResult.seed
        << " with Validation MSE: " << bestResult.validationMSE << endl;
 
-  */
-
+  /*
   BestSeedResult bestResult = {.seed = 2822, .validationMSE = 0.00952255};
+  */
 
   cout << "Testing the best seed on test set: " << endl;
 
@@ -529,17 +528,20 @@ int main() {
   vector<int> hitsPerGeneration(config.generations);
 
   generationTest(trainingInputs, trainingTargets, trainingErrors,
-		 validationInputs, validationTargets, validationErrors,
-		 growStrategy, finalPopulation, config, hitsPerGeneration);
+                 validationInputs, validationTargets, validationErrors,
+                 growStrategy, finalPopulation, config, hitsPerGeneration);
 
   // Get the best one from the validation set
   auto finalValRes =
       validatePopulation(validationInputs, validationTargets, finalPopulation,
-			 0, finalPopulation.size() - 1);
+                         0, finalPopulation.size() - 1);
 
   // Pull the lever!!!!
   auto finalTestRes = validatePopulation(
       testInputs, testTargets, finalPopulation, 0, finalPopulation.size() - 1);
+
+  auto t2 = chrono::steady_clock::now();
+  chrono::duration<double> duration = t2 - t1;
 
   cout << "================ FINAL REPORT ================" << endl;
   cout << "VALIDATION STATS (The Selection Criteria):" << endl;
@@ -564,11 +566,12 @@ int main() {
 
   cout << "BEST FORMULA: "
        << finalPopulation[finalValRes.bestIndividualIndex]->toString(
-	      testInputs[0])
+              testInputs[0])
        << endl;
 
   cout << "Hits per generation: " << utils::vectorToString(hitsPerGeneration)
        << endl;
+  cout << "Runtime: " << duration.count() << endl;
   cout << "=============================================" << endl;
   return 0;
 }
