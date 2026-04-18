@@ -11,14 +11,14 @@ enum class OpType { ADD, SUB, MUL, DIV, SQUARE, SIZE };
 const int OP_TYPE_SIZE = static_cast<int>(OpType::SIZE);
 
 class Node {
- public:
+public:
   Node() = default;
-  Node(const Node& other);
+  Node(const Node &other);
 
   // variable names mapped to values ("a" -> 4.1)
-  virtual double evaluate(const std::vector<double>& vars) = 0;
-  virtual std::string toString(const std::vector<double>& vars) = 0;
-  virtual void getChildren(std::vector<std::unique_ptr<Node>*>& res);
+  virtual double evaluate(const std::vector<double> &vars) = 0;
+  virtual std::string toString() = 0;
+  virtual void getChildren(std::vector<std::unique_ptr<Node> *> &res);
   virtual size_t getNumberOfChildren();
   virtual ~Node() = default;
   [[nodiscard]] virtual std::unique_ptr<Node> clone() const = 0;
@@ -26,13 +26,13 @@ class Node {
 };
 
 class VariableNode : public Node {
- private:
+private:
   int index;
 
- public:
+public:
   VariableNode(int index);
-  std::string toString(const std::vector<double>& vars) override;
-  double evaluate(const std::vector<double>& vars) override;
+  std::string toString() override;
+  double evaluate(const std::vector<double> &vars) override;
   [[nodiscard]] std::unique_ptr<Node> clone() const override;
 };
 
@@ -40,20 +40,20 @@ class VariableNode : public Node {
 // and children (who to apply this operand to)
 // when generating the tree
 class OperatorNode : public Node {
- private:
+private:
   std::vector<std::unique_ptr<Node>> children;
   bool isUnary;
   OpType type;
 
- public:
+public:
   OperatorNode(OpType type);
   void addChild(std::unique_ptr<Node> newChild);
   [[nodiscard]] bool getIsUnary() const;
-  std::string toString(const std::vector<double>& vars) override;
-  void getChildren(std::vector<std::unique_ptr<Node>*>& res) override;
+  std::string toString() override;
+  void getChildren(std::vector<std::unique_ptr<Node> *> &res) override;
 
   size_t getNumberOfChildren() override;
-  double evaluate(const std::vector<double>& vars) override;
+  double evaluate(const std::vector<double> &vars) override;
 
   [[nodiscard]] std::unique_ptr<Node> clone() const override;
 };
@@ -61,13 +61,13 @@ class OperatorNode : public Node {
 // always a leaf node, no children
 // constant value
 class ConstantNode : public Node {
- private:
+private:
   double value;
 
- public:
+public:
   ConstantNode(double value);
-  std::string toString(const std::vector<double>& vars) override;
-  double evaluate(const std::vector<double>& vars) override;
+  std::string toString() override;
+  double evaluate(const std::vector<double> &vars) override;
   [[nodiscard]] std::unique_ptr<Node> clone() const override;
 
   bool tryTuneValue(double delta) override;

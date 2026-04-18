@@ -11,25 +11,51 @@ using namespace std;
 
 namespace utils {
 
-double calculateSD(const vector<double>& data) {
+enum class Mode { MIN, MAX };
+
+// sort the array and get the threshold error
+template <Mode M>
+std::tuple<double, double> getThreshError(std::vector<double> arr,
+                                          double thresholdPercent) {
+
+  std::sort(arr.begin(), arr.end());
+  const size_t N = arr.size() - 1;
+
+  if constexpr (M == Mode::MIN) {
+
+    // get the best performing individuals at the beginning of the array and the
+    // min error
+    double thresholdErr = arr[N * thresholdPercent];
+    return std::make_tuple(thresholdErr, arr[0]);
+
+  } else {
+
+    // get the poorest performing individuals at the end of the array (1 - ) and
+    // the max error
+    double thresholdErr = arr[N * (1 - thresholdPercent)];
+    return std::make_tuple(thresholdErr, arr[N]);
+  }
+}
+
+double calculateSD(const vector<double> &data) {
   double sum = 0.0, mean, standardDeviation = 0.0;
 
-  for (const auto& el : data) {
+  for (const auto &el : data) {
     sum += el;
   }
 
   mean = sum / data.size();
 
-  for (const auto& el : data) {
+  for (const auto &el : data) {
     standardDeviation += pow(el - mean, 2);
   }
 
   return sqrt(standardDeviation / data.size());
 }
 
-void printTrees(vector<unique_ptr<Tree>>& population, vector<double>& inputs) {
+void printTrees(vector<unique_ptr<Tree>> &population) {
   for (int i = 0; i < population.size(); i++) {
-    cout << population[i]->toString(inputs) << endl;
+    cout << population[i]->toString() << endl;
   }
 }
 
@@ -39,8 +65,8 @@ struct SelectionResult {
   size_t worstOverallIndex;
 };
 
-SelectionResult tournamentSelection(const vector<double>& errors,
-				    int tournamentSize) {
+SelectionResult tournamentSelection(const vector<double> &errors,
+                                    int tournamentSize) {
   // preallocate a vector to store the selection indices
   vector<int> selectedIndices;
   // resize fills with 0s
@@ -60,7 +86,7 @@ SelectionResult tournamentSelection(const vector<double>& errors,
 
       // challenger outperforms the best individual
       if (errors[challenger] < errors[bestIndividualIndex]) {
-	bestIndividualIndex = challenger;
+        bestIndividualIndex = challenger;
       }
     }
 
@@ -75,16 +101,15 @@ SelectionResult tournamentSelection(const vector<double>& errors,
   }
 
   return {.selectedIndices = selectedIndices,
-	  .bestOverallIndex = bestOverallIndex};
+          .bestOverallIndex = bestOverallIndex};
 }
 
-template <typename T>
-string vectorToString(const vector<T>& toPrint) {
+template <typename T> string vectorToString(const vector<T> &toPrint) {
   stringstream res;
 
   res << "[ ";
 
-  for (const auto& p : toPrint) {
+  for (const auto &p : toPrint) {
     res << p << " ";
   }
   res << "]";
@@ -111,10 +136,10 @@ vector<tuple<int, int>> getThreadIndices(int populationSize, int numThreads) {
 
   for (int i = 0; i < numThreads; i++) {
     indices.push_back(
-	getIndices(i, static_cast<int>(populationSize), CHUNK_SIZE));
+        getIndices(i, static_cast<int>(populationSize), CHUNK_SIZE));
   }
 
   return indices;
 }
 
-}  // namespace utils
+} // namespace utils

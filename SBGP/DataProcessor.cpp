@@ -5,16 +5,16 @@ using namespace std;
 void DataProcessor::readCSV(string inputFile) {
   csv::CSVReader reader(inputFile);
 
-  for (auto& row : reader) {
+  for (auto &row : reader) {
     targets.push_back(row["load"].get<double>());
     inputs.push_back({
-	row["load_n1"].get<double>(),
-	row["load_n2"].get<double>(),
-	row["load_n3"].get<double>(),
-	row["load_n4"].get<double>(),
-	row["load_n5"].get<double>(),
-	row["load_n6"].get<double>(),
-	row["load_prev_day"].get<double>(),
+        row["load_n1"].get<double>(),
+        row["load_n2"].get<double>(),
+        row["load_n3"].get<double>(),
+        row["load_n4"].get<double>(),
+        row["load_n5"].get<double>(),
+        row["load_n6"].get<double>(),
+        row["load_prev_day"].get<double>(),
     });
   }
 }

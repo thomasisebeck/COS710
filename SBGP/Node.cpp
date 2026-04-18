@@ -1,4 +1,5 @@
 #include "Node.h"
+#include "vars.h"
 
 #include <algorithm>
 #include <cassert>
@@ -28,9 +29,7 @@ double ConstantNode::evaluate(const vector<double> &) {
   return this->value;
 }
 
-string ConstantNode::toString(const vector<double> &) {
-  return std::to_string(this->value);
-}
+string ConstantNode::toString() { return std::to_string(this->value); }
 
 std::unique_ptr<Node> ConstantNode::clone() const {
   return make_unique<ConstantNode>(this->value);
@@ -53,13 +52,7 @@ double VariableNode::evaluate(const vector<double> &vars) {
   return vars[this->index];
 }
 
-string VariableNode::toString(const vector<double> &vars) {
-  assert((this->index >= 0 && this->index < vars.size()) &&
-         "Variable node index out of bound");
-
-  return "x" + std::to_string(this->index) + "(" +
-         std::to_string(vars[this->index]) + ")";
-}
+string VariableNode::toString() { return "x" + std::to_string(this->index); }
 
 std::unique_ptr<Node> VariableNode::clone() const {
   return make_unique<VariableNode>(this->index);
@@ -103,11 +96,11 @@ string convOpToString(OpType op) {
   }
 }
 
-string OperatorNode::toString(const vector<double> &vars) {
+string OperatorNode::toString() {
   string childrenOut;
 
   for (const auto &child : this->children) {
-    childrenOut += child->toString(vars) + ",";
+    childrenOut += child->toString() + ",";
   }
 
   return convOpToString(this->type) + "( " +
@@ -132,9 +125,6 @@ void OperatorNode::addChild(unique_ptr<Node> newChild) {
 
   this->children.push_back(std::move(newChild));
 }
-
-// create a smallest denomitator value
-const double EPSILON = 1e-6;
 
 double protectedDivide(double numerator, double denominator) {
   if (std::abs(denominator) < EPSILON) {
@@ -187,8 +177,8 @@ double OperatorNode::evaluate(const vector<double> &vars) {
            this->children[1]->evaluate(vars);
 
   default:
-    assert(false && "OperatorNode::evaluate - Unhandled node type");
+    throw std::runtime_error("Unknown operator encountered in evaluate!");
   }
 
-  assert(false && "OperatorNode::evaluate - Unhandled node type");
+  throw std::runtime_error("Should not reach here!");
 }
