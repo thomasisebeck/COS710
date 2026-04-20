@@ -481,7 +481,7 @@ int main() {
 
   // ----------------------------- CONFIG ----------------------- //
   GrowStrategy growStrategy = {
-      .minDepth = 2, .maxDepth = 5, .fullGrow = 10, .grow = 10};
+      .minDepth = 2, .maxDepth = 5, .fullGrow = 15, .grow = 15};
 
   const int POP_SIZE = (growStrategy.fullGrow + growStrategy.grow) *
                        (growStrategy.maxDepth - growStrategy.minDepth + 1);
