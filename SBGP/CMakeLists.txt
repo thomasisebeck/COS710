@@ -29,7 +29,6 @@ add_executable(out ${SOURCES} ${CSV_SOURCES})
 # target_link_libraries(out csv)
 
 
-
 # 3. Apply Flags based on the Optimize option
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
     message(STATUS "Build Mode: OPTIMIZED (Assertions disabled)")
@@ -40,7 +39,7 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release")
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         message(STATUS "Adding additional optimisations")
 
-        target_compile_options(out PRIVATE -O3 -march=native -mtune=native -flto -ffast-math)
+        target_compile_options(out PRIVATE -O3 -march=native -mtune=native -flto -ffast-math -funroll-loops -finline-limit=10000)
         target_compile_definitions(out PRIVATE NDEBUG) # This removes the assertions!
     endif()
 else()

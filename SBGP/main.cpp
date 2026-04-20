@@ -1,5 +1,9 @@
 #include <algorithm>
 #include <cassert>
+#include <filesystem>
+#include <fstream>
+
+namespace fs = std::filesystem;
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -27,7 +31,6 @@ enum class TreeType { FULL_GROW, GROW };
 
 struct Config {
   struct Percycle {
-    int canonicalGenerations;
     int localSearchGenerations;
     int peturbGenerations;
   } percycle;
@@ -345,7 +348,6 @@ struct BestSeedResult {
 };
 
 /*
- *
 BestSeedResult findBestSeed(const vector<vector<double>> &trainingInputs,
                             const vector<double> &trainingTargets,
                             const vector<vector<double>> &validationInputs,
@@ -373,143 +375,135 @@ BestSeedResult findBestSeed(const vector<vector<double>> &trainingInputs,
 
     vector<double> trainingErrors(config.populationSize);
     vector<double> validationErrors(config.populationSize);
-    vector<int> hitsPerGeneration(config.generations);
-
-    generationTest(trainingInputs, trainingTargets, trainingErrors,
-                   validationInputs, validationTargets, validationErrors,
-                   growStrategy, population, config, hitsPerGeneration);
-
-    // Validate the population
-    auto valRes = validatePopulation(validationInputs, validationTargets,
-                                     population, 0, population.size() - 1);
-    // Track the absolute best seed based on Validation performance
-    if (valRes.bestMSE < bestValidationMSE) {
-      bestValidationMSE = valRes.bestMSE;
-      finalBestSeed = trySeed;
-    }
-  }
-
-  return {.seed = finalBestSeed, .validationMSE = bestValidationMSE};
-}
-
-void runFinalTest() {
-
-  auto t1 = chrono::steady_clock::now();
-
-  // Init data processor
-  DataProcessor dataProcessor;
-
-  dataProcessor.readCSV("./dataset/training.csv");
-  vector<vector<double>> trainingInputs = dataProcessor.getInputs();
-  vector<double> trainingTargets = dataProcessor.getTargets();
-
-  dataProcessor.readCSV("./dataset/validation.csv");
-  vector<vector<double>> validationInputs = dataProcessor.getInputs();
-  vector<double> validationTargets = dataProcessor.getTargets();
-
-  dataProcessor.readCSV("./dataset/test.csv");
-  vector<vector<double>> testInputs = dataProcessor.getInputs();
-  vector<double> testTargets = dataProcessor.getTargets();
-
-  if (!fs::exists("../results")) {
-    cout << "creating results dir..." << endl;
-    fs::create_directories("../results");
-  }
-
-  // ----------------------------- CONFIG ----------------------- //
-  GrowStrategy growStrategy = {
-      .minDepth = 2, .maxDepth = 5, .fullGrow = 10, .grow = 10};
-
-  const int POP_SIZE = (growStrategy.fullGrow + growStrategy.grow) *
-                       (growStrategy.maxDepth - growStrategy.minDepth + 1);
-
-  Tree::highestConstant = 2;
-  Tree::smallestConstant = -2;
-
-  Config config = {
-      .populationSize = POP_SIZE,
-      .numThreads = 8,
-      .percycle = {.canonicalGenerations = }.chooseConstantProbability = 0.5,
-      .tournamentSize = 4,
-      .numVars = static_cast<int>(trainingInputs[0].size()),
-      .prematureLeafProbability = 0.25,
-      .crossoverRate = 0.7,
-      .mutationRate = 0.35,
-      .tuneConstantProbability = 0.5,
-      .parsimonyPressure = 0.00008,
-      .highestStoppingError = 0.00999,
-      .highestHitError = 0.012};
-  // ------------------------------------------------------------ //
-
-  // 1. Find the best seed based on Validation set result
-  BestSeedResult bestResult =
-      findBestSeed(trainingInputs, trainingTargets, validationInputs,
-                   validationTargets, growStrategy, config);
-
-  cout << "\nBest Seed Found: " << bestResult.seed
-       << " with Validation MSE: " << bestResult.validationMSE << endl;
-
-  // BestSeedResult bestResult = {.seed = 2822, .validationMSE = 0.00952255};
-
-
-  cout << "Testing the best seed on test set: " << endl;
-
-  Tree::seed = bestResult.seed;
-  Tree::engine.seed(Tree::seed);
-
-  vector<unique_ptr<Tree>> finalPopulation(config.populationSize);
-  vector<double> trainingErrors(config.populationSize);
-  vector<double> validationErrors(config.populationSize);
-  vector<int> hitsPerGeneration(config.generations);
-
-  generationTest(trainingInputs, trainingTargets, trainingErrors,
-                 validationInputs, validationTargets, validationErrors,
-                 growStrategy, finalPopulation, config, hitsPerGeneration);
-
-  // Get the best one from the validation set
-  auto finalValRes =
-      validatePopulation(validationInputs, validationTargets, finalPopulation,
-                         0, finalPopulation.size() - 1);
-
-  // Pull the lever!!!!
-  auto finalTestRes = validatePopulation(
-      testInputs, testTargets, finalPopulation, 0, finalPopulation.size() - 1);
-
-  auto t2 = chrono::steady_clock::now();
-  chrono::duration<double> duration = t2 - t1;
-
-  cout << "================ FINAL REPORT ================" << endl;
-  cout << "VALIDATION STATS (The Selection Criteria):" << endl;
-  cout << "  Best:   " << finalValRes.bestMSE << endl;
-  cout << "  Avg:    " << finalValRes.avgMSE << endl;
-  cout << "  Median: " << finalValRes.medianMSE << endl;
-  cout << "  stdDev: " << finalValRes.stdDev << endl;
-  cout << "  Worst:  " << finalValRes.worstMSE << endl;
-  cout << "---------------------------------------------" << endl;
-
-  cout << "TEST STATS (The Unseen Data):" << endl;
-  cout << "  Best:   " << finalTestRes.bestMSE << endl;
-  cout << "  Avg:    " << finalTestRes.avgMSE << endl;
-  cout << "  Median: " << finalTestRes.medianMSE << endl;
-  cout << "  stdDev: " << finalTestRes.stdDev << endl;
-  cout << "  Worst:  " << finalTestRes.worstMSE << endl;
-  cout << "---------------------------------------------" << endl;
-
-  // Calculate the gap between Validation and Test
-  double genGap = std::abs(finalTestRes.bestMSE - finalValRes.bestMSE);
-  cout << "Generalization Gap: " << genGap << endl;
-
-  cout << "BEST FORMULA: "
-       << finalPopulation[finalValRes.bestIndividualIndex]->toString(
-              testInputs[0])
-       << endl;
-
-  cout << "Hits per generation: " << utils::vectorToString(hitsPerGeneration)
-       << endl;
-  cout << "Runtime: " << duration.count() << endl;
-  cout << "=============================================" << endl;
-}
+    vector<int> hitsPerGeneration(config.cycles *
+                                  (config.percycle.canonicalGenerations *
+                                   config.percycle.localSearchGenerations *
+                                   config.percycle.peturbGenerations));
 */
+/*
+  // grow initial population
+growPopulation(population, config, growStrategy);
+
+// init best indivdual
+auto fittestIndividual = population[0]->clone();
+double fittestErr = 100000;
+
+// evolve through generations
+for (int i = 0; i < config.generations; i++) {
+// call generation to continue after initial grow
+auto check =
+    generation(population, inputs, targets, errors, validationInputs,
+               validationTargets, validationErrors, config,
+               fittestIndividual, fittestErr);
+
+hitsPerGerenation.push_back(check.hits);
+
+if (check.mustStop) {
+  cout << "Exiting..." <<
+ */
+
+//----------------------------------- run the generations
+//---------------------//
+
+/*
+// grow initial population
+growPopulation(population, config, growStrategy);
+
+// init best indivdual
+auto fittestIndividual = population[0]->clone();
+double fittestErr = 100000;
+
+for (int i = 0; i < config.generations; i++) {
+// call generation to continue after initial grow
+auto check =
+    generation(population, inputs, targets, errors, validationInputs,
+               validationTargets, validationErrors, config,
+               fittestIndividual, fittestErr);
+
+
+
+generationTest(trainingInputs, trainingTargets, trainingErrors,
+               validationInputs, validationTargets, validationErrors,
+               growStrategy, population, config, hitsPerGeneration);
+
+// Validate the population
+auto valRes = validatePopulation(validationInputs, validationTargets,
+                                 population, 0, population.size() - 1);
+// Track the absolute best seed based on Validation performance
+if (valRes.bestMSE < bestValidationMSE) {
+  bestValidationMSE = valRes.bestMSE;
+  finalBestSeed = trySeed;
+}
+}
+
+return {.seed = finalBestSeed, .validationMSE = bestValidationMSE};
+}
+
+*/
+
+void exportToCSV(string seed, const ValidationResult &valRes,
+                 const ValidationResult &testRes, const Config &config,
+                 const GrowStrategy &grow, double runtimeS, int bestNodeCount,
+                 const string &bestIndividual, const vector<int> &hitsPerGen) {
+
+  if (!fs::exists("./results")) {
+    cout << "creating results dir..." << endl;
+    fs::create_directories("./results");
+  }
+
+  string filename = "./results/final.csv";
+  bool fileExists = fs::exists(filename);
+
+  // Open in append mode
+  ofstream file(filename, ios::app);
+
+  if (!file.is_open()) {
+    cerr << "Failed to open " << filename << " for writing." << endl;
+    return;
+  }
+
+  // If the file is new, write the header row first
+  if (!fileExists) {
+    file
+        << "seed,valBestMSE,valWorstMSE,valMedianMSE,valAvgMSE,valStdDevMSE,"
+        << "testBestMSE,testWorstMSE,testMedianMSE,testAvgMSE,testStdDevMSE,"
+        << "smallestConstant,highestConstant,minDepth,maxDepth,fullGrow,grow,"
+        << "popSize,canonicalGens,localSearchGens,perturbGens,cycles,"
+        << "tournamentSize,prematureLeafProbability,mutationRate,crossoverRate,"
+        << "tuneConstantProbability,parsimonyPressure,freezeElitePercent,"
+        << "runtimeS,bestIndividualNodeCount,bestIndividual,hitsPerGen\n";
+  }
+
+  // Write the data row
+  // Using defaultfloat and setting high precision to capture exact MSEs
+  file << defaultfloat << setprecision(8);
+
+  file << seed << "," << valRes.bestMSE << "," << valRes.worstMSE << ","
+       << valRes.medianMSE << "," << valRes.avgMSE << "," << valRes.stdDev
+       << "," << testRes.bestMSE << "," << testRes.worstMSE << ","
+       << testRes.medianMSE << "," << testRes.avgMSE << "," << testRes.stdDev
+       << "," << Tree::smallestConstant << "," << Tree::highestConstant << ","
+       << grow.minDepth << "," << grow.maxDepth << "," << grow.fullGrow << ","
+       << grow.grow << "," << config.populationSize << ","
+       << config.percycle.localSearchGenerations << ","
+       << config.percycle.peturbGenerations << "," << config.cycles << ","
+       << config.tournamentSize << "," << config.prematureLeafProbability << ","
+       << config.mutationRate << "," << config.crossoverRate << ","
+       << config.tuneConstantProbability << "," << scientific
+       << config.parsimonyPressure << defaultfloat << ","
+       << config.freezeEliteIndividualsPercent << "," << fixed
+       << setprecision(5) << runtimeS << "," << bestNodeCount << ","
+       << "\"" << bestIndividual << "\",\""; // Wrap string in quotes
+
+  // Format the hitsPerGen array as a string enclosed in brackets [ x y z ]
+  file << "[ ";
+  for (size_t i = 0; i < hitsPerGen.size(); i++) {
+    file << hitsPerGen[i] << (i == hitsPerGen.size() - 1 ? "" : " ");
+  }
+  file << " ]\"\n"; // Close the string quotes and add newline
+
+  file.close();
+}
 
 void runTestCase() {
 
@@ -529,11 +523,6 @@ void runTestCase() {
   vector<double> testTargets = dataProcessor.getTargets();
 
   //------------------------- config ---------------------------//
-  GrowStrategy growStrategy = {
-      .minDepth = 5, .maxDepth = 7, .fullGrow = 5, .grow = 5};
-
-  const int POP_SIZE = (growStrategy.fullGrow + growStrategy.grow) *
-                       (growStrategy.maxDepth - growStrategy.minDepth + 1);
 
   // freeze only if the tree is >= 2 nodes deep
   Tree::freezeCutoffDepth = 2;
@@ -541,210 +530,220 @@ void runTestCase() {
   Tree::highestConstant = 2;
   Tree::smallestConstant = -2;
 
-  Config config = {.percycle{.canonicalGenerations = 10,
-                             .localSearchGenerations = 10,
-                             .peturbGenerations = 2},
-                   .cycles = 5,
-                   .populationSize = POP_SIZE,
-                   .numThreads = 8,
-                   .chooseConstantProbability = 0.5,
-                   .tournamentSize = 3,
-                   .numVars = static_cast<int>(trainingInputs[0].size()),
-                   .prematureLeafProbability = 0.25,
-                   .crossoverRate = 0.7,
-                   .mutationRate = 0.35,
-                   .tuneConstantProbability = 0.5,
-                   .parsimonyPressure = 0.000001,
-                   .highestStoppingError = 0.00999,
-                   .highestHitError = 0.012,
-                   .freezeEliteIndividualsPercent = 0.3};
-  //------------------------------------------------------------//
+  std::vector<GrowStrategy> growStrategies = {
+      {.minDepth = 3, .maxDepth = 7, .fullGrow = 15, .grow = 15}, // 750
+      //{.minDepth = 3, .maxDepth = 7, .fullGrow = 60, .grow = 60}, // 600
+      //{.minDepth = 3, .maxDepth = 7, .fullGrow = 45, .grow = 45}, // 450
+      //{.minDepth = 3, .maxDepth = 7, .fullGrow = 30, .grow = 30}, // 300
+  };
 
-  // run 1 generation
-  vector<unique_ptr<Tree>> population(config.populationSize);
-  vector<double> trainingErrors(config.populationSize);
-  vector<double> validationErrors(config.populationSize);
-  vector<int> hitsPerGeneration(config.cycles *
-                                (config.percycle.canonicalGenerations +
-                                 config.percycle.peturbGenerations +
-                                 config.percycle.localSearchGenerations));
+  std::vector<int> topSeeds;
 
-  std::vector<int> topSeeds = {
-      1030, 1098, 1125, 1135, 1148, 1167, 1188, 1219, 1337, 1364, 1557, 1602,
-      1633, 1704, 1710, 1711, 1764, 1875, 1911, 1960, 2090, 2123, 2168, 2233,
-      2275, 2308, 2369, 2534, 2539, 2626, 2658, 2679, 2714, 2822, 2838, 2929,
-      2939, 3024, 3109, 3116, 3251, 3283, 3293, 3313, 3315, 3349, 3351, 3439,
-      3594, 3605, 3627, 3941, 4007, 4030, 4061, 4080};
+  const int START_SEED = 1001;
+  const int END_SEED = 1005;
+
+  for (int i = START_SEED; i <= END_SEED; i++) {
+    topSeeds.push_back(i);
+  }
+
+  int fileName = 0;
 
   for (const auto &seed : topSeeds) {
-
-    Tree::seed = seed;
-
-    int genCounter = 0;
 
     cout << endl
          << "<<<<<<<<<<<<<<<< seed " << seed << " >>>>>>>>>>>>>>>" << endl;
 
-    auto t1 = chrono::steady_clock::now();
+    for (const auto &strategy : growStrategies) {
 
-    // grow initial population
-    growPopulation(population, config, growStrategy);
+      const int POP_SIZE = (strategy.fullGrow + strategy.grow) *
+                           (strategy.maxDepth - strategy.minDepth + 1);
 
-    // init best indivdual
-    auto fittestIndividual = population[0]->clone();
-    double fittestErr = 100000;
+      Config config = {
+          .percycle{.localSearchGenerations = 10, .peturbGenerations = 2},
+          .cycles = 5,
+          .populationSize = POP_SIZE,
+          .numThreads = 8,
+          .chooseConstantProbability = 0.5,
+          .tournamentSize = 3,
+          .numVars = static_cast<int>(trainingInputs[0].size()),
+          .prematureLeafProbability = 0.25,
+          .crossoverRate = 0.7,
+          .mutationRate = 0.35,
+          .tuneConstantProbability = 0.5,
+          .parsimonyPressure = 0.000001,
+          .highestStoppingError = 0.005,
+          .highestHitError = 0.012,
+          .freezeEliteIndividualsPercent = 0.3};
+      //------------------------------------------------------------//
 
-    // evolve through each cycle
-    for (int i = 0; i < config.cycles; i++) {
-      // call generation to continue after initial grow
-      cout << "================ cycle " << i << " of " << config.cycles
-           << " ===============" << endl
-           << "canonical: ";
+      const int TOTAL_GENERATIONS =
+          config.cycles * ((config.percycle.peturbGenerations - 1) +
+                           config.percycle.localSearchGenerations);
 
-      for (int j = 0; j < config.percycle.canonicalGenerations; j++) {
+      for (int i = 0; i < 2; i++) {
 
-        cout << genCounter++ << " ";
+        vector<unique_ptr<Tree>> population(config.populationSize);
+        vector<double> trainingErrors(config.populationSize);
+        vector<double> validationErrors(config.populationSize);
+        vector<int> hitsPerGeneration;
+        hitsPerGeneration.reserve(TOTAL_GENERATIONS);
 
-        if (generation(population, trainingInputs, trainingTargets,
-                       trainingErrors, validationInputs, validationTargets,
-                       validationErrors, config, fittestIndividual, fittestErr)
-                .mustStop) {
-          cout << "Exiting..." << endl;
-          break;
-        }
-      }
+        Tree::seed = seed;
+        Tree::engine.seed(Tree::seed);
 
-      // get the min error to freeze calcuated from the begining of the array
-      auto threshMin = utils::getThreshError<utils::Mode::MIN>(
-          trainingErrors, config.freezeEliteIndividualsPercent);
+        int genCounter = 0;
 
-      const double range = get<0>(threshMin) - get<1>(threshMin);
+        auto t1 = chrono::steady_clock::now();
 
-      // unfreeze all, the population has converged
-      if (range < EPSILON) {
+        // grow initial population
+        growPopulation(population, config, strategy);
 
-        cout << "--------------------------------------------------" << endl;
-        cout << "---- Converged: Freezing bottom for diversity ----" << endl;
-        cout << "--------------------------------------------------" << endl;
+        // init best indivdual
+        auto fittestIndividual = population[0]->clone();
+        double fittestErr = 100000;
 
-        for (const auto &i : population)
-          i->freezeToPercent<FreezeType::BOTTOM>();
+        if (i == 0) { // Canonical
+                      //
+                      //
+          cout << "---------------------- canonical -------------------------"
+               << endl;
 
-      } else {
-        // do normal freezing based on fitness
+          // evolve through each cycle
+          for (int gen = 0; gen < TOTAL_GENERATIONS; gen++) {
 
-        for (int i = 0; i < trainingErrors.size(); i++)
-          // check if below threshold error
-          if (trainingErrors[i] < get<0>(threshMin)) {
-            // this is a good individual, freeze the top layers
+            cout << genCounter++ << " ";
 
-            // (my error - min error) / (threshold error - min error)
-            // my error is always less than the threshold
-            // closer my error is to the threshold min, the more gets frozen
-            double scoreDiff = (trainingErrors[i] - get<1>(threshMin)) /
-                               (get<0>(threshMin) - get<1>(threshMin));
+            const auto genRes = generation(
+                population, trainingInputs, trainingTargets, trainingErrors,
+                validationInputs, validationTargets, validationErrors, config,
+                fittestIndividual, fittestErr);
 
-            // freeze more for a scoreDiff that is closer to 0 (closer to the
-            // min error)
-            population[i]->freezeToPercent<FreezeType::TOP>(1 - scoreDiff);
+            if (genRes.mustStop) {
+              cout << "exiting..." << endl;
+              break;
+            }
+
+            hitsPerGeneration.push_back(genRes.hits);
           }
-      }
 
-      cout << ", local: ";
+          auto t2 = chrono::steady_clock::now();
 
-      for (int j = 0; j < config.percycle.localSearchGenerations; j++) {
+          auto valRes =
+              validatePopulation(validationInputs, validationTargets,
+                                 population, 0, population.size() - 1);
 
-        cout << genCounter++ << " ";
+          auto testRes = validatePopulation(testInputs, testTargets, population,
+                                            0, population.size() - 1);
 
-        if (generation(population, trainingInputs, trainingTargets,
-                       trainingErrors, validationInputs, validationTargets,
-                       validationErrors, config, fittestIndividual, fittestErr)
-                .mustStop) {
-          cout << "Exiting..." << endl;
-          break;
-        }
-      }
+          int bestNodeCount =
+              population[valRes.bestIndividualIndex]->getNodeCount();
+          string bestIndivString =
+              population[valRes.bestIndividualIndex]->toString();
 
-      // no point in peturbing on the last generation
-      // they are about to go into the test case
-      if (i < config.cycles - 1) {
+          exportToCSV(to_string(seed) + to_string(POP_SIZE) + "_canonical" +
+                          to_string(fileName++),
+                      valRes, testRes, config, strategy,
+                      chrono::duration<double>(t2 - t1).count(), bestNodeCount,
+                      bestIndivString, hitsPerGeneration);
+        } else { // SBGP
+          cout << "---------------------- SBGP -------------------------"
+               << endl;
 
-        // get the max error to peturb calcuated from the end of the array
-        auto threshMax = utils::getThreshError<utils::Mode::MAX>(
-            trainingErrors, config.freezeEliteIndividualsPercent);
+          // evolve through each cycle
+          for (int cycle = 0; cycle < config.cycles; cycle++) {
+            // call generation to continue after initial grow
+            cout << "================ cycle " << cycle << " of "
+                 << config.cycles << " ===============" << endl;
 
-        // threshold and max error will likely always be large enough
-        for (int e = 0; e < trainingErrors.size(); e++) {
-          // check if this individuals error is above or equal (prevents
-          // stagnation on convergence) to the threshold error, in which case it
-          // needs a shake up
-          if (trainingErrors[e] >= get<0>(threshMax)) {
-            population[e]->freezeToPercent<FreezeType::BOTTOM>();
+            cout << ", local: ";
+
+            for (int locGen = 0;
+                 locGen < config.percycle.localSearchGenerations; locGen++) {
+
+              cout << genCounter++ << " ";
+
+              const auto genRes = generation(
+                  population, trainingInputs, trainingTargets, trainingErrors,
+                  validationInputs, validationTargets, validationErrors, config,
+                  fittestIndividual, fittestErr);
+
+              if (genRes.mustStop) {
+                cout << "Exiting..." << endl;
+                break;
+              }
+
+              hitsPerGeneration.push_back(genRes.hits);
+            }
+
+            // no point in peturbing on the last generation
+            // they are about to go into the test case
+            if (cycle < config.cycles - 1) {
+
+              // get the max error to peturb calcuated from the end of the
+              // array
+              auto threshMax = utils::getThreshError<utils::Mode::MAX>(
+                  trainingErrors, config.freezeEliteIndividualsPercent);
+
+              // threshold and max error will likely always be large enough
+              for (int e = 0; e < trainingErrors.size(); e++) {
+                // check if this individuals error is above or equal (prevents
+                // stagnation on convergence) to the threshold error, in which
+                // case it needs a shake up
+                if (trainingErrors[e] >= get<0>(threshMax)) {
+                  population[e]->freezeToPercent<FreezeType::BOTTOM>();
+                }
+              }
+              cout << ", peturb: ";
+
+              for (int petGen = 0; petGen < config.percycle.peturbGenerations;
+                   petGen++) {
+
+                cout << genCounter++ << " ";
+
+                const auto genRes = generation(
+                    population, trainingInputs, trainingTargets, trainingErrors,
+                    validationInputs, validationTargets, validationErrors,
+                    config, fittestIndividual, fittestErr);
+
+                if (genRes.mustStop) {
+                  cout << "Exiting..." << endl;
+                  break;
+                }
+
+                hitsPerGeneration.push_back(genRes.hits);
+              }
+
+              // unfreeze for the start of the new cycle
+              // where canonical will begin
+              for (const auto &p : population)
+                p->freezeToPercent<FreezeType::NONE>();
+
+              cout << endl;
+            }
           }
+
+          auto t2 = chrono::steady_clock::now();
+
+          auto valRes =
+              validatePopulation(validationInputs, validationTargets,
+                                 population, 0, population.size() - 1);
+
+          auto testRes = validatePopulation(testInputs, testTargets, population,
+                                            0, population.size() - 1);
+
+          int bestNodeCount =
+              population[valRes.bestIndividualIndex]->getNodeCount();
+          string bestIndivString =
+              population[valRes.bestIndividualIndex]->toString();
+
+          exportToCSV(to_string(seed) + "_" + to_string(POP_SIZE) + "_SB" +
+                          to_string(fileName++),
+                      valRes, testRes, config, strategy,
+                      chrono::duration<double>(t2 - t1).count(), bestNodeCount,
+                      bestIndivString, hitsPerGeneration);
         }
-        cout << ", peturb: ";
-
-        for (int p = 0; p < config.percycle.peturbGenerations; p++) {
-
-          cout << genCounter++ << " ";
-
-          if (generation(population, trainingInputs, trainingTargets,
-                         trainingErrors, validationInputs, validationTargets,
-                         validationErrors, config, fittestIndividual,
-                         fittestErr)
-                  .mustStop) {
-            cout << "Exiting..." << endl;
-            break;
-          }
-        }
-
-        // unfreeze for the start of the new cycle
-        // where canonical will begin
-        for (const auto &p : population)
-          p->freezeToPercent<FreezeType::NONE>();
-
-        cout << endl;
       }
     }
-
-    auto valRes = validatePopulation(validationInputs, validationTargets,
-                                     population, 0, population.size() - 1);
-
-    auto t2 = chrono::steady_clock::now();
-
-    cout << endl << "VALIDATION STATS (The Selection Criteria):" << endl;
-    cout << "  Best:   " << valRes.bestMSE << endl;
-    cout << "  Avg:    " << valRes.avgMSE << endl;
-    cout << "  Median: " << valRes.medianMSE << endl;
-    cout << "  stdDev: " << valRes.stdDev << endl;
-    cout << "  Worst:  " << valRes.worstMSE << endl;
-
-    cout << "CONFIG STATS:" << endl;
-    cout << "  Population size:      " << POP_SIZE << endl;
-    cout << "  Tournament size:      " << config.tournamentSize << endl;
-    cout << "  Canonical Gens:       " << config.percycle.canonicalGenerations
-         << endl;
-    cout << "  Local Search Gens:    " << config.percycle.localSearchGenerations
-         << endl;
-    cout << "  Perturb Gens:         " << config.percycle.peturbGenerations
-         << endl;
-    cout << "  Crossover rate:       " << config.crossoverRate << endl;
-    cout << "  Mutation rate:        " << config.mutationRate << endl;
-    cout << "  Parsimony pressure:   " << config.parsimonyPressure << endl;
-    cout << "  Constant prob:        " << config.chooseConstantProbability
-         << endl;
-    cout << "  Tune constant prob:   " << config.tuneConstantProbability
-         << endl;
-    cout << "  Premature leaf prob:  " << config.prematureLeafProbability
-         << endl;
-    cout << "  Freeze elite %:       " << config.freezeEliteIndividualsPercent
-         << endl;
-    cout << "  Freeze top layer:     " << config.freezeTopUntilLayer << endl;
-    cout << "  Stopping error:       " << config.highestStoppingError << endl;
-    cout << "  Hit error:            " << config.highestHitError << endl;
-    cout << "  Runtime:            "
-         << chrono::duration<double>(t2 - t1).count() << endl;
-    cout << "---------------------------------------------" << endl;
   }
 }
 

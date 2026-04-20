@@ -1,4 +1,4 @@
-# prerequisites
+# prerequisite packages 
 
 sudo pacman -S glibc
 sudo pacman -S debuginfod
@@ -12,10 +12,12 @@ Clone this if it does not exist:
 
 # how do run
 
+Required compiler: GNU 15.2.1
+
 ```
 mkdir build
 cd build
-cmake ..
+cmake .. -DCMAKE_BUILD_TYPE=Release
 make
 ./out
 ```
