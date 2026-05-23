@@ -4,30 +4,18 @@
 #include <cassert>
 #include <iostream>
 #include <limits>
-#include <print>
 #include <string>
+#include <tuple>
 using namespace std;
 
 int Genome::genomeSize = 10;
 int Genome::chooseVariableBias = 0;
 int Genome::chooseConstantBias = 0;
+double Genome::prematureLeafProbalility = 0.5;
 
 enum class RuleSet { ADD = 0, SUB, MUL, DIV, SQUARE, SIZE };
 
-/*
-  std::vector<int> genome;
-  static int SIZE;
-  */
-
-void Genome::generateRandomGenome() {
-  assert(this->genome.empty() && "genome must be empty");
-
-  for (int i = 0; i < Genome::genomeSize; i++) {
-    this->genome.push_back(Tree::getRandomInt(0, 255));
-  }
-}
-
-const int MAX_INT_CODON = 65535;
+int MAX_INT_CODON = 65535;
 
 // codon values are between 0 and 255
 double convertCodonsToScaledFloat(int first, int second) {
@@ -52,19 +40,135 @@ double convertCodonsToScaledFloat(int first, int second) {
   return Tree::smallestConstant + (percentage * range);
 }
 
-Genome::Genome() {
+std::tuple<int, int, int> getRulesVarsConst(int varSize) {
+  const int numRules = static_cast<int>(RuleSet::SIZE);
+  const int numVars = varSize + Genome::chooseVariableBias;
+  const int numConstants = Genome::chooseConstantBias;
+
+  return std::make_tuple(numRules, numVars, numConstants);
+}
+
+void Genome::generateRandomGenomeRec(int currDepth, int varSize, bool grow) {
+
+  bool chooseLeafNow =
+      Tree::getRandomDouble(0, 1) >= Genome::prematureLeafProbalility;
+
+  // reached the max depth, or have a premature leaf
+  bool mustChooseTerminal =
+      currDepth >= maxInitialDepth || (grow && chooseLeafNow);
+
+  const auto [numRules, numVars, numConstants] = getRulesVarsConst(varSize);
+
+  const auto fullSize =
+      static_cast<int>(RuleSet::SIZE) + numVars + numConstants;
+
+  // modify this random val to map to a constant
+  // since we are adding to this random value, it must be
+  // reduced at least by one fullsize
+  auto randomValMisaligned = Tree::getRandomInt(0, MAX_INT_CODON - fullSize);
+
+  // this is how much the random val is misaligned
+  auto remainder = randomValMisaligned % fullSize;
+
+  // align with the start of the ruleset
+  // currently pointing at first production rule for operator
+  auto randomValueAligned = randomValMisaligned - remainder;
+
+  // must have a leaf here....
+  if (mustChooseTerminal) {
+
+    if (Tree::getRandomInt(0, fullSize) >= Genome::chooseConstantBias) {
+
+      // start one off the end of the ruleset array (at the constant thresh)
+      // add a random int up till the end constant index (numConstants - 1)
+      // to put it still in constant range
+      // eg: if you have 2 constants, it will add 0 or 1
+      auto constantOffset = static_cast<int>(RuleSet::SIZE) +
+                            Tree::getRandomInt(0, numConstants - 1);
+
+      // produce a constant node
+      // add the aligned random value (always points at first operator
+      // production rule) to the size of production rules + a random int to
+      // get a constant
+      this->genome.push_back(randomValueAligned + constantOffset);
+
+      // write the actual constant bits to the tape
+      // use pushback to prevent any issues
+      this->genome.push_back(Tree::getRandomInt(0, MAX_INT_CODON));
+      this->genome.push_back(Tree::getRandomInt(0, MAX_INT_CODON));
+    } else {
+      // reverse engineer a variable node
+
+      // start one off the end of the ruleset array, and the constant array
+      // add a random int up till the end constant index (numConstants - 1)
+      // to put it still in variable range
+      // eg: if you have 3 vars, it will add 0, 1, or 2
+      auto variableOffset = static_cast<int>(RuleSet::SIZE) + numConstants +
+                            Tree::getRandomInt(0, numVars - 1);
+
+      // produce a variable node
+      this->genome.push_back(randomValueAligned + variableOffset);
+    }
+
+    return;
+  }
+
+  // chooosing a function node.....
+  // X rules, X - 1 indices
+  auto ruleOffset = Tree::getRandomInt(0, static_cast<int>(RuleSet::SIZE) - 1);
+
+  this->genome.push_back(randomValueAligned + ruleOffset);
+
+  // get the rule and produce the children
+
+  switch (static_cast<RuleSet>(ruleOffset)) {
+    // binary expressions
+  case RuleSet::ADD:
+  case RuleSet::SUB:
+  case RuleSet::MUL:
+  case RuleSet::DIV:
+    // produced 2 children
+    generateRandomGenomeRec(currDepth + 1, varSize, grow);
+    generateRandomGenomeRec(currDepth + 1, varSize, grow);
+
+    break;
+  case RuleSet::SQUARE:
+    // produce 1 childe
+    generateRandomGenomeRec(currDepth + 1, varSize, grow);
+    break;
+  default:
+    assert(false && "Unknown rule found during init");
+  }
+}
+
+void Genome::generateRandomGenome(bool grow, int varSize) {
+  this->generateRandomGenomeRec(0, varSize, grow);
+
+  // pad the rest to make sure that it is fixed size
+  while (this->genome.size() < this->genomeSize) {
+    this->genome.push_back(Tree::getRandomInt(0, MAX_INT_CODON));
+  }
+
+  // clip the end of the array down
+  if (this->genome.size() > this->genomeSize) {
+    this->genome.resize(this->genomeSize);
+  }
+
+  assert(this->genome.size() == this->genomeSize &&
+         "Genome size after init is not correct");
+}
+
+Genome::Genome(int depth, bool grow, int varSize) {
+  this->maxInitialDepth = depth;
   this->nodeCount = -1;
-  generateRandomGenome();
+  generateRandomGenome(grow, varSize);
 }
 
 // choosing a var has a greate probability depending on ChooseVariableBias
 int boundAndBiasRule(int input, int varSize) {
   assert(input >= 0 && "bounding: input cannot be negative");
 
-  const int numRules = static_cast<int>(RuleSet::SIZE);
-  const int numVars = varSize + Genome::chooseVariableBias;
-  const int numConstants = Genome::chooseConstantBias;
-
+  const auto [numRules, numVars, numConstants] = getRulesVarsConst(varSize);
   // bias the genome towards choosing variable nodes and constant nodes
   int maxInd = numRules + numVars + numConstants;
 
@@ -187,6 +291,12 @@ double Genome::evaluateRec(const std::vector<double> &vars, int &currInd,
   std::cout << "CHOOSE VAR THRESH : " << chooseVariableThreshold << std::endl;
   std::cout << "CHOOSE CONST THRESH : " << chooseConstantThreshold << std::endl;
   assert(false && "You dun messed up bradda");
+}
+
+int Genome::getNodeCount() {
+  assert(this->nodeCount != -1 && "Node count not initialised");
+
+  return this->nodeCount;
 }
 
 double Genome::evaluate(const std::vector<double> &vars) {

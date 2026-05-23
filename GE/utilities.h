@@ -51,7 +51,7 @@ double calculateSD(const vector<double> &data) {
   return sqrt(standardDeviation / data.size());
 }
 
-void printTrees(vector<unique_ptr<Tree>> &population) {
+template <class T> void printPopulation(vector<unique_ptr<T>> &population) {
   for (int i = 0; i < population.size(); i++) {
     cout << population[i]->toString() << endl;
   }

@@ -3,6 +3,7 @@
 #include <cassert>
 #include <filesystem>
 #include <fstream>
+#include <istream>
 
 namespace fs = std::filesystem;
 #include <functional>
@@ -51,6 +52,8 @@ struct Config {
   double freezeTopUntilLayer;
 };
 
+enum class ParsimonyMode { TREE = 0, GE = 1 };
+
 // INFO: inputs is a 2d vector that
 // represent the variable inputs of the
 // tree targets is a 1d vector which
@@ -58,8 +61,9 @@ struct Config {
 // (given each set of inputs) results is
 // a 1d vector storing the values of the
 // evaluations
+template <class T>
 void evaluate(int startInd, int endIndExclusive,
-              vector<unique_ptr<Tree>> &population,
+              vector<unique_ptr<T>> &population,
               const vector<vector<double>> &inputs,
               const vector<double> &targets, vector<double> &errors,
               const Config &conf, vector<int> &threadHits,
@@ -106,9 +110,12 @@ void mutatePopulation(vector<unique_ptr<Tree>> &population, const Config &conf,
   }
 }
 
+void growGrammaticalEvolutionPopulation(vector<unique_ptr<Genome>> &population,
+                                        Config &conf) {}
+
 // WARN: call single threaded
-void growPopulation(vector<unique_ptr<Tree>> &population, Config &conf,
-                    const GrowStrategy &growStrategy) {
+void growTreePopulation(vector<unique_ptr<Tree>> &population, Config &conf,
+                        const GrowStrategy &growStrategy) {
   int index = 0;
 
   // loop through the min and max depths
@@ -154,17 +161,44 @@ struct GenerationRet {
   int hits;
 };
 
+GenerationRet grammGeneration(
+    vector<unique_ptr<Genome>> &population,
+    const vector<vector<double>> &inputs, const vector<double> &targets,
+    vector<double> &errors, const vector<vector<double>> &validationInputs,
+    const vector<double> &validationTargets, vector<double> &validationErrors,
+    Config &conf, unique_ptr<Genome> &fittestIndivdual, double &fittestErr) {
+
+  // list of threads
+  vector<thread> threads;
+  threads.reserve(conf.numThreads);
+
+  auto indices = utils::getThreadIndices(population.size(), conf.numThreads);
+
+  // -----------------------------------------------------
+
+  vector<int> threadHits(conf.numThreads, 0);
+
+  // INFO: 2A) spawn threads to evaluate the whole buffer
+  for (int i = 0; i < conf.numThreads; i++) {
+    auto [start, end] = indices[i];
+
+    threads.emplace_back(&evaluate<Genome>, start, end, ref(population),
+                         cref(inputs), cref(targets), ref(errors), cref(conf),
+                         ref(threadHits), i);
+  }
+  utils::printPopulation(population);
+}
+
+template <class TreeOrGenome, ParsimonyMode ParsMode>
 // assumes that the initial trees are already grown
-GenerationRet generation(vector<unique_ptr<Tree>> &population,
-                         const vector<vector<double>> &inputs,
-                         const vector<double> &targets, vector<double> &errors,
-                         const vector<vector<double>> &validationInputs,
-                         const vector<double> &validationTargets,
-                         vector<double> &validationErrors, Config &conf,
-                         unique_ptr<Tree> &fittestIndivdual,
-                         double &fittestErr) {
-  assert(population.size() % 2 == 0 &&
-         "Population size must be divisible by 2");
+GenerationRet treeGeneration(
+    vector<unique_ptr<TreeOrGenome>> &population,
+    const vector<vector<double>> &inputs, const vector<double> &targets,
+    vector<double> &errors, const vector<vector<double>> &validationInputs,
+    const vector<double> &validationTargets, vector<double> &validationErrors,
+    Config &conf, unique_ptr<Tree> &fittestIndivdual, double &fittestErr) {
+  assert(population.size() % conf.numThreads == 0 &&
+         "Population size must be divisible by numthreads");
 
   GenerationRet toRet = {.mustStop = false, .hits = 0};
 
@@ -182,9 +216,9 @@ GenerationRet generation(vector<unique_ptr<Tree>> &population,
   for (int i = 0; i < conf.numThreads; i++) {
     auto [start, end] = indices[i];
 
-    threads.emplace_back(&evaluate, start, end, ref(population), cref(inputs),
-                         cref(targets), ref(errors), cref(conf),
-                         ref(threadHits), i);
+    threads.emplace_back(&evaluate<TreeOrGenome, ParsMode>, start, end,
+                         ref(population), cref(inputs), cref(targets),
+                         ref(errors), cref(conf), ref(threadHits), i);
   }
 
   // INFO: 2B) join
@@ -255,8 +289,9 @@ GenerationRet generation(vector<unique_ptr<Tree>> &population,
   vector<int> bestHits(1);
 
   // evaluate only the best indivdual with the validation set
-  evaluate(replaceMe, replaceMe + 1, population, validationInputs,
-           validationTargets, validationErrors, conf, bestHits, 0);
+  evaluate<Tree, ParsimonyMode::TREE>(replaceMe, replaceMe + 1, population,
+                                      validationInputs, validationTargets,
+                                      validationErrors, conf, bestHits, 0);
 
   // to test
   if (validationErrors[replaceMe] <= conf.highestStoppingError) {
@@ -505,7 +540,7 @@ void exportToCSV(string seed, const ValidationResult &valRes,
   file.close();
 }
 
-void runTestCase() {
+template <class TreeOrGenome, ParsimonyMode ParsMode> void runTestCase() {
 
   // Init data processor
   DataProcessor dataProcessor;
@@ -596,7 +631,7 @@ void runTestCase() {
         auto t1 = chrono::steady_clock::now();
 
         // grow initial population
-        growPopulation(population, config, strategy);
+        growTreePopulation(population, config, strategy);
 
         // init best indivdual
         auto fittestIndividual = population[0]->clone();
@@ -613,7 +648,7 @@ void runTestCase() {
 
             cout << genCounter++ << " ";
 
-            const auto genRes = generation(
+            const auto genRes = treeGeneration<TreeOrGenome, ParsMode>(
                 population, trainingInputs, trainingTargets, trainingErrors,
                 validationInputs, validationTargets, validationErrors, config,
                 fittestIndividual, fittestErr);
@@ -662,7 +697,7 @@ void runTestCase() {
 
               cout << genCounter++ << " ";
 
-              const auto genRes = generation(
+              const auto genRes = treeGeneration<TreeOrGenome, ParsMode>(
                   population, trainingInputs, trainingTargets, trainingErrors,
                   validationInputs, validationTargets, validationErrors, config,
                   fittestIndividual, fittestErr);
@@ -700,7 +735,7 @@ void runTestCase() {
 
                 cout << genCounter++ << " ";
 
-                const auto genRes = generation(
+                const auto genRes = treeGeneration<TreeOrGenome, ParsMode>(
                     population, trainingInputs, trainingTargets, trainingErrors,
                     validationInputs, validationTargets, validationErrors,
                     config, fittestIndividual, fittestErr);
@@ -750,27 +785,50 @@ void runTestCase() {
 void testGE() {
   cout << "Testing GE: " << endl;
 
-  Tree::highestConstant = -2;
-  Tree::smallestConstant = 2;
+  Tree::highestConstant = 2;
+  Tree::smallestConstant = -2;
   Tree::seed = 6;
 
   Genome::chooseConstantBias = 2;
   Genome::chooseVariableBias = 3;
   Genome::genomeSize = 50;
+  const int initialGenomeDepth = 5;
 
   std::vector<double> vars = {1, 2, 3};
+  std::vector<double> vars2 = {-1, -2, -3};
+  std::vector<double> vars3 = {100, 200, 300};
 
-  std::vector<Genome> genomes;
+  std::vector<Genome> fullGrowGenomes;
 
-  for (int i = 0; i < 200; i++) {
-    Genome g;
-    genomes.emplace_back(g);
+  for (int i = 0; i < 20; i++) {
+    // full grow
+    Genome g(3, false, vars.size());
+    fullGrowGenomes.emplace_back(g);
   }
 
-  for (auto &g : genomes) {
+  cout << "---------------- FULL GROW: -----------------" << endl;
+
+  for (auto &g : fullGrowGenomes) {
     // cout << "GENOME" << g.toString() << endl;
     // cout << "EVALUATE (1,2,3): " << g.evaluate(vars) << endl;
-    cout << "EVALUATE (1,2,3): " << g.toString() << " = " << g.evaluate(vars)
+    cout << "EVALUATE (1, 2, 3): " << g.toString() << " = " << g.evaluate(vars)
+         << endl;
+  }
+
+  std::vector<Genome> growGenomes;
+
+  for (int i = 0; i < 20; i++) {
+    // full grow
+    Genome g(3, true, vars.size());
+    growGenomes.emplace_back(g);
+  }
+
+  cout << "------------------ GROW: --------------------" << endl;
+
+  for (auto &g : growGenomes) {
+    // cout << "GENOME" << g.toString() << endl;
+    // cout << "EVALUATE (1,2,3): " << g.evaluate(vars) << endl;
+    cout << "EVALUATE (1, 2, 3): " << g.toString() << " = " << g.evaluate(vars)
          << endl;
   }
 }
