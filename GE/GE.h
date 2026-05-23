@@ -11,6 +11,7 @@ private:
   double evaluateRec(const std::vector<double> &vars, int &currInd,
                      int &currCalls);
   int getNextGenome(int &currInd);
+  int nodeCount;
 
 public:
   static int genomeSize;

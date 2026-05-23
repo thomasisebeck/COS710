@@ -52,7 +52,10 @@ double convertCodonsToScaledFloat(int first, int second) {
   return Tree::smallestConstant + (percentage * range);
 }
 
-Genome::Genome() { generateRandomGenome(); }
+Genome::Genome() {
+  this->nodeCount = -1;
+  generateRandomGenome();
+}
 
 // choosing a var has a greate probability depending on ChooseVariableBias
 int boundAndBiasRule(int input, int varSize) {
@@ -91,8 +94,10 @@ double Genome::evaluateRec(const std::vector<double> &vars, int &currInd,
          "Choose var bias must divide among vars equally");
 
   // non-terminating genome, get rid of it
-  if (currCalls++ > MAX_CALLS)
+  if (currCalls++ > MAX_CALLS) {
+
     return std::numeric_limits<double>::quiet_NaN();
+  }
 
   // choose a rule: 0 -> 5
   // choose a variable: 0 -> (size - 1)
@@ -102,9 +107,10 @@ double Genome::evaluateRec(const std::vector<double> &vars, int &currInd,
   // this includes choosing a varible from the vars array
   const int decision = boundAndBiasRule(currentGenome, vars.size());
 
-  // out of the rules choose a constant
-  const int chooseConstantThreshold = static_cast<int>(RuleSet::SIZE) - 1;
-  // out of the rules and the constants
+  // as you hit out of bounds for the ruleset, choose a constant
+  const int chooseConstantThreshold = static_cast<int>(RuleSet::SIZE);
+
+  // as you are out of bounds for the constants, choose a variable
   const int chooseVariableThreshold =
       chooseConstantThreshold + Genome::chooseConstantBias;
 
@@ -122,7 +128,8 @@ double Genome::evaluateRec(const std::vector<double> &vars, int &currInd,
     const auto nextLeft = getNextGenome(currInd);
     const auto nextRight = getNextGenome(currInd);
 
-    const auto printMe = convertCodonsToScaledFloat(nextLeft, nextRight);
+    // const auto printMe = convertCodonsToScaledFloat(nextLeft, nextRight);
+    // cout << "value: " << printMe << endl;
 
     // convert to float
     return convertCodonsToScaledFloat(nextLeft, nextRight);
@@ -182,18 +189,27 @@ double Genome::evaluateRec(const std::vector<double> &vars, int &currInd,
   assert(false && "You dun messed up bradda");
 }
 
+double Genome::evaluate(const std::vector<double> &vars) {
+  int currInd = 0;
+  int currCalls = 0;
+
+  // recursively evaluate this genome
+  // this will increment the number of calls that the tree
+  // took to get the node count
+  const auto res = evaluateRec(vars, currInd, currCalls);
+
+  // set the "node count" to the number of calls that it takes to evaluate the
+  // gene this is essentially how many children the genome has, and dictates the
+  // evaluation complexity
+  this->nodeCount = currCalls;
+
+  return res;
+}
+
 string Genome::toString() const {
   string res = "[ ";
   for (const auto &c : this->genome)
     res += to_string(c) + " ";
 
   return res + "]";
-}
-
-double Genome::evaluate(const std::vector<double> &vars) {
-  int currInd = 0;
-  int currCalls = 0;
-
-  // recursively evaluate this genome
-  return evaluateRec(vars, currInd, currCalls);
 }
