@@ -9,6 +9,7 @@ FullGrowTree::FullGrowTree(int depth, int numVars,
                            double chooseConstantProbability,
                            double tuneConstantProbability)
     : Tree(depth, numVars, chooseConstantProbability, tuneConstantProbability) {
+  this->grow();
 }
 
 /*

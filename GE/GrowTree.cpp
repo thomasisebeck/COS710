@@ -11,6 +11,8 @@ GrowTree::GrowTree(int depth, int numVars, double chooseConstantProbability,
       Tree(depth, numVars, chooseConstantProbability, tuneConstantProbability) {
   assert((prematureLeafProbability >= 0.0 && prematureLeafProbability < 1.0) &&
          "Invalid value for premature leaf probability");
+
+  this->grow();
 }
 
 /*

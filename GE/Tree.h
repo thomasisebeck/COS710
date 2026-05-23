@@ -4,8 +4,7 @@
 #include <vector>
 
 #include "Node.h"
-
-enum class FreezeType { BOTTOM = 0, TOP = 1, NONE = 2 };
+#include "Operations.h"
 
 class Tree {
 private:
@@ -22,7 +21,10 @@ private:
   std::unique_ptr<Node> getTerminal();
   int getDepthOfNode(Node *toFind);
   int frozenThresholdLayer;
-  FreezeType freezeType;
+
+  op::FreezeType freezeType;
+
+  virtual void grow() = 0;
 
 protected:
   // cannot instantiate
@@ -60,10 +62,9 @@ public:
   [[nodiscard]] int getNodeCount();
   void mutate();
 
-  template <FreezeType Type> void freezeToPercent(double scorediff = 0);
+  template <op::FreezeType> void freezeToPercent(double scorediff = 0);
 
   [[nodiscard]] virtual std::unique_ptr<Tree> clone() const = 0;
-  virtual void grow() = 0;
 
   // must be on template
   double evaluate(const std::vector<double> &vars);

@@ -1,4 +1,5 @@
 
+#pragma once
 
 namespace op {
 
@@ -9,5 +10,7 @@ double protectedDivide(double numerator, double denominator);
 double protectedSqrt(double num);
 
 double protectedPow(double base, double exp);
+
+enum class FreezeType { BOTTOM = 0, TOP = 1, NONE = 2 };
 
 } // namespace op

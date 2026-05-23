@@ -3,9 +3,6 @@
 #include <cassert>
 #include <filesystem>
 #include <fstream>
-#include <istream>
-
-namespace fs = std::filesystem;
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -13,7 +10,6 @@ namespace fs = std::filesystem;
 #include <random>
 #include <string>
 #include <thread>
-#include <tuple>
 #include <vector>
 
 #include "DataProccessor.h"
@@ -22,6 +18,7 @@ namespace fs = std::filesystem;
 #include "Tree.h"
 #include "utilities.h"
 
+namespace fs = std::filesystem;
 using namespace std;
 
 enum class Action { GROW, EVALUATE, PRINT };
@@ -36,7 +33,6 @@ struct Config {
     int peturbGenerations;
   } percycle;
   int cycles;
-  int populationSize;
   int numThreads;
   double chooseConstantProbability;
   int tournamentSize;
@@ -52,7 +48,7 @@ struct Config {
   double freezeTopUntilLayer;
 };
 
-enum class ParsimonyMode { TREE = 0, GE = 1 };
+enum class OperationMode { TREE = 0, GE = 1 };
 
 // INFO: inputs is a 2d vector that
 // represent the variable inputs of the
@@ -61,9 +57,9 @@ enum class ParsimonyMode { TREE = 0, GE = 1 };
 // (given each set of inputs) results is
 // a 1d vector storing the values of the
 // evaluations
-template <class T>
+template <class TreeOrGenome>
 void evaluate(int startInd, int endIndExclusive,
-              vector<unique_ptr<T>> &population,
+              vector<unique_ptr<TreeOrGenome>> &population,
               const vector<vector<double>> &inputs,
               const vector<double> &targets, vector<double> &errors,
               const Config &conf, vector<int> &threadHits,
@@ -101,8 +97,9 @@ struct GrowStrategy {
   int grow;
 };
 
-void mutatePopulation(vector<unique_ptr<Tree>> &population, const Config &conf,
-                      int startInd, int endIndExclusive) {
+template <class TreeOrGenome>
+void mutatePopulation(vector<unique_ptr<TreeOrGenome>> &population,
+                      const Config &conf, int startInd, int endIndExclusive) {
   for (int i = startInd; i < endIndExclusive; i++) {
     if (Tree::getRandomDouble(0, 1) < conf.mutationRate) {
       population[i]->mutate();
@@ -110,12 +107,10 @@ void mutatePopulation(vector<unique_ptr<Tree>> &population, const Config &conf,
   }
 }
 
-void growGrammaticalEvolutionPopulation(vector<unique_ptr<Genome>> &population,
-                                        Config &conf) {}
+template <OperationMode Mode, class TreeOrGenome>
+void growInitialPopulation(vector<unique_ptr<TreeOrGenome>> &population,
+                           Config &conf, const GrowStrategy &growStrategy) {
 
-// WARN: call single threaded
-void growTreePopulation(vector<unique_ptr<Tree>> &population, Config &conf,
-                        const GrowStrategy &growStrategy) {
   int index = 0;
 
   // loop through the min and max depths
@@ -125,11 +120,15 @@ void growTreePopulation(vector<unique_ptr<Tree>> &population, Config &conf,
     for (int f = 0; f < growStrategy.fullGrow; f++) {
       assert(index < population.size() &&
              "Population index out of bounds for fullgrow");
-      population[index] = make_unique<FullGrowTree>(
-          depth, conf.numVars, conf.chooseConstantProbability,
-          conf.tuneConstantProbability);
 
-      population[index++]->grow();
+      if constexpr (Mode == OperationMode::GE) {
+        // int depth, bool grow, int varSize
+        population[index++] = make_unique<Genome>(depth, false, conf.numVars);
+      } else {
+        population[index++] = make_unique<FullGrowTree>(
+            depth, conf.numVars, conf.chooseConstantProbability,
+            conf.tuneConstantProbability);
+      }
     }
 
     // grow all the grow trees
@@ -137,15 +136,18 @@ void growTreePopulation(vector<unique_ptr<Tree>> &population, Config &conf,
       assert(index < population.size() &&
              "Population index out of bounds for grow");
 
-      population[index] = make_unique<GrowTree>(
-          depth, conf.numVars, conf.chooseConstantProbability,
-          conf.prematureLeafProbability, conf.tuneConstantProbability);
+      if constexpr (Mode == OperationMode::GE) {
 
-      population[index++]->grow();
+        population[index++] = make_unique<Genome>(depth, true, conf.numVars);
+      } else {
+        population[index++] = make_unique<GrowTree>(
+            depth, conf.numVars, conf.chooseConstantProbability,
+            conf.prematureLeafProbability, conf.tuneConstantProbability);
+      }
     }
   }
 
-  assert(index == population.size() && "popluation not filled");
+  assert(index == population.size() && "population not filled");
 
   auto rng = std::default_random_engine{};
   std::ranges::shuffle(population, rng);
@@ -161,42 +163,16 @@ struct GenerationRet {
   int hits;
 };
 
-GenerationRet grammGeneration(
-    vector<unique_ptr<Genome>> &population,
-    const vector<vector<double>> &inputs, const vector<double> &targets,
-    vector<double> &errors, const vector<vector<double>> &validationInputs,
-    const vector<double> &validationTargets, vector<double> &validationErrors,
-    Config &conf, unique_ptr<Genome> &fittestIndivdual, double &fittestErr) {
-
-  // list of threads
-  vector<thread> threads;
-  threads.reserve(conf.numThreads);
-
-  auto indices = utils::getThreadIndices(population.size(), conf.numThreads);
-
-  // -----------------------------------------------------
-
-  vector<int> threadHits(conf.numThreads, 0);
-
-  // INFO: 2A) spawn threads to evaluate the whole buffer
-  for (int i = 0; i < conf.numThreads; i++) {
-    auto [start, end] = indices[i];
-
-    threads.emplace_back(&evaluate<Genome>, start, end, ref(population),
-                         cref(inputs), cref(targets), ref(errors), cref(conf),
-                         ref(threadHits), i);
-  }
-  utils::printPopulation(population);
-}
-
-template <class TreeOrGenome, ParsimonyMode ParsMode>
+template <class TreeOrGenome, OperationMode ParsMode>
 // assumes that the initial trees are already grown
-GenerationRet treeGeneration(
-    vector<unique_ptr<TreeOrGenome>> &population,
-    const vector<vector<double>> &inputs, const vector<double> &targets,
-    vector<double> &errors, const vector<vector<double>> &validationInputs,
-    const vector<double> &validationTargets, vector<double> &validationErrors,
-    Config &conf, unique_ptr<Tree> &fittestIndivdual, double &fittestErr) {
+GenerationRet generation(vector<unique_ptr<TreeOrGenome>> &population,
+                         const vector<vector<double>> &inputs,
+                         const vector<double> &targets, vector<double> &errors,
+                         const vector<vector<double>> &validationInputs,
+                         const vector<double> &validationTargets,
+                         vector<double> &validationErrors, Config &conf,
+                         unique_ptr<TreeOrGenome> &fittestIndivdual,
+                         double &fittestErr) {
   assert(population.size() % conf.numThreads == 0 &&
          "Population size must be divisible by numthreads");
 
@@ -216,9 +192,9 @@ GenerationRet treeGeneration(
   for (int i = 0; i < conf.numThreads; i++) {
     auto [start, end] = indices[i];
 
-    threads.emplace_back(&evaluate<TreeOrGenome, ParsMode>, start, end,
-                         ref(population), cref(inputs), cref(targets),
-                         ref(errors), cref(conf), ref(threadHits), i);
+    threads.emplace_back(&evaluate<TreeOrGenome>, start, end, ref(population),
+                         cref(inputs), cref(targets), ref(errors), cref(conf),
+                         ref(threadHits), i);
   }
 
   // INFO: 2B) join
@@ -241,7 +217,7 @@ GenerationRet treeGeneration(
   }
 
   // Create the next generation from the selected indices
-  vector<unique_ptr<Tree>> nextGeneration;
+  vector<unique_ptr<TreeOrGenome>> nextGeneration;
   nextGeneration.reserve(population.size());
 
   // INFO: 4A) crossover (single threaded):
@@ -272,7 +248,8 @@ GenerationRet treeGeneration(
   for (int i = 0; i < conf.numThreads; i++) {
     auto [start, end] = indices[i];
 
-    threads.emplace_back(&mutatePopulation, ref(population), conf, start, end);
+    threads.emplace_back(&mutatePopulation<TreeOrGenome>, ref(population), conf,
+                         start, end);
   }
 
   // INFO: 4B) join
@@ -289,9 +266,9 @@ GenerationRet treeGeneration(
   vector<int> bestHits(1);
 
   // evaluate only the best indivdual with the validation set
-  evaluate<Tree, ParsimonyMode::TREE>(replaceMe, replaceMe + 1, population,
-                                      validationInputs, validationTargets,
-                                      validationErrors, conf, bestHits, 0);
+  evaluate<TreeOrGenome>(replaceMe, replaceMe + 1, population, validationInputs,
+                         validationTargets, validationErrors, conf, bestHits,
+                         0);
 
   // to test
   if (validationErrors[replaceMe] <= conf.highestStoppingError) {
@@ -314,10 +291,10 @@ struct ValidationResult {
   int bestIndividualIndex;
 };
 
-ValidationResult validatePopulation(const vector<vector<double>> &inputs,
-                                    const vector<double> &targets,
-                                    vector<unique_ptr<Tree>> &population,
-                                    int startInd, int endInd) {
+template <class TreeOrGenome>
+ValidationResult validatePopulation(
+    const vector<vector<double>> &inputs, const vector<double> &targets,
+    vector<unique_ptr<TreeOrGenome>> &population, int startInd, int endInd) {
   // take each of the individuals in the population and get the MSE per
   // individual
   ValidationResult res = {.avgMSE = 0,
@@ -479,7 +456,8 @@ return {.seed = finalBestSeed, .validationMSE = bestValidationMSE};
 void exportToCSV(string seed, const ValidationResult &valRes,
                  const ValidationResult &testRes, const Config &config,
                  const GrowStrategy &grow, double runtimeS, int bestNodeCount,
-                 const string &bestIndividual, const vector<int> &hitsPerGen) {
+                 const string &bestIndividual, const vector<int> &hitsPerGen,
+                 int populationSize) {
 
   if (!fs::exists("./results")) {
     cout << "creating results dir..." << endl;
@@ -519,7 +497,7 @@ void exportToCSV(string seed, const ValidationResult &valRes,
        << testRes.medianMSE << "," << testRes.avgMSE << "," << testRes.stdDev
        << "," << Tree::smallestConstant << "," << Tree::highestConstant << ","
        << grow.minDepth << "," << grow.maxDepth << "," << grow.fullGrow << ","
-       << grow.grow << "," << config.populationSize << ","
+       << grow.grow << "," << populationSize << ","
        << config.percycle.localSearchGenerations << ","
        << config.percycle.peturbGenerations << "," << config.cycles << ","
        << config.tournamentSize << "," << config.prematureLeafProbability << ","
@@ -540,46 +518,25 @@ void exportToCSV(string seed, const ValidationResult &valRes,
   file.close();
 }
 
-template <class TreeOrGenome, ParsimonyMode ParsMode> void runTestCase() {
-
-  // Init data processor
-  DataProcessor dataProcessor;
-
-  dataProcessor.readCSV("./dataset/training.csv");
-  vector<vector<double>> trainingInputs = dataProcessor.getInputs();
-  vector<double> trainingTargets = dataProcessor.getTargets();
-
-  dataProcessor.readCSV("./dataset/validation.csv");
-  vector<vector<double>> validationInputs = dataProcessor.getInputs();
-  vector<double> validationTargets = dataProcessor.getTargets();
-
-  dataProcessor.readCSV("./dataset/test.csv");
-  vector<vector<double>> testInputs = dataProcessor.getInputs();
-  vector<double> testTargets = dataProcessor.getTargets();
-
-  //------------------------- config ---------------------------//
-
-  // freeze only if the tree is >= 2 nodes deep
-  Tree::freezeCutoffDepth = 2;
-  Tree::freezeBottomPercent = 0.5; // freeze half the tree
-  Tree::highestConstant = 2;
-  Tree::smallestConstant = -2;
-
-  std::vector<GrowStrategy> growStrategies = {
-      {.minDepth = 3, .maxDepth = 7, .fullGrow = 15, .grow = 15}, // 750
-      //{.minDepth = 3, .maxDepth = 7, .fullGrow = 60, .grow = 60}, // 600
-      //{.minDepth = 3, .maxDepth = 7, .fullGrow = 45, .grow = 45}, // 450
-      //{.minDepth = 3, .maxDepth = 7, .fullGrow = 30, .grow = 30}, // 300
-  };
+template <OperationMode Mode, class TreeOrGenome>
+void runTestCase(Config &config, vector<GrowStrategy> growStrategies,
+                 const vector<vector<double>> &trainingInputs,
+                 const vector<double> &trainingTargets,
+                 const vector<vector<double>> &validationInputs,
+                 const vector<double> &validationTargets,
+                 const vector<vector<double>> &testInputs,
+                 const vector<double> &testTargets) {
 
   std::vector<int> topSeeds;
 
   const int START_SEED = 1001;
-  const int END_SEED = 1005;
+  const int END_SEED = 1002;
 
   for (int i = START_SEED; i <= END_SEED; i++) {
     topSeeds.push_back(i);
   }
+
+  //------------------------------------------------------------//
 
   int fileName = 0;
 
@@ -590,36 +547,18 @@ template <class TreeOrGenome, ParsimonyMode ParsMode> void runTestCase() {
 
     for (const auto &strategy : growStrategies) {
 
-      const int POP_SIZE = (strategy.fullGrow + strategy.grow) *
-                           (strategy.maxDepth - strategy.minDepth + 1);
+      int POP_SIZE = (strategy.fullGrow + strategy.grow) *
+                     (strategy.maxDepth - strategy.minDepth + 1);
 
-      Config config = {
-          .percycle{.localSearchGenerations = 10, .peturbGenerations = 2},
-          .cycles = 5,
-          .populationSize = POP_SIZE,
-          .numThreads = 8,
-          .chooseConstantProbability = 0.5,
-          .tournamentSize = 3,
-          .numVars = static_cast<int>(trainingInputs[0].size()),
-          .prematureLeafProbability = 0.25,
-          .crossoverRate = 0.7,
-          .mutationRate = 0.35,
-          .tuneConstantProbability = 0.5,
-          .parsimonyPressure = 0.000001,
-          .highestStoppingError = 0.005,
-          .highestHitError = 0.012,
-          .freezeEliteIndividualsPercent = 0.3};
-      //------------------------------------------------------------//
-
-      const int TOTAL_GENERATIONS =
-          config.cycles * ((config.percycle.peturbGenerations - 1) +
-                           config.percycle.localSearchGenerations);
+      int TOTAL_GENERATIONS =
+          (config.cycles * config.percycle.localSearchGenerations) +
+          ((config.cycles - 1) * config.percycle.peturbGenerations);
 
       for (int i = 0; i < 2; i++) {
 
-        vector<unique_ptr<Tree>> population(config.populationSize);
-        vector<double> trainingErrors(config.populationSize);
-        vector<double> validationErrors(config.populationSize);
+        vector<unique_ptr<TreeOrGenome>> population(POP_SIZE);
+        vector<double> trainingErrors(POP_SIZE);
+        vector<double> validationErrors(POP_SIZE);
         vector<int> hitsPerGeneration;
         hitsPerGeneration.reserve(TOTAL_GENERATIONS);
 
@@ -631,7 +570,7 @@ template <class TreeOrGenome, ParsimonyMode ParsMode> void runTestCase() {
         auto t1 = chrono::steady_clock::now();
 
         // grow initial population
-        growTreePopulation(population, config, strategy);
+        growInitialPopulation<Mode, TreeOrGenome>(population, config, strategy);
 
         // init best indivdual
         auto fittestIndividual = population[0]->clone();
@@ -648,7 +587,7 @@ template <class TreeOrGenome, ParsimonyMode ParsMode> void runTestCase() {
 
             cout << genCounter++ << " ";
 
-            const auto genRes = treeGeneration<TreeOrGenome, ParsMode>(
+            const auto genRes = generation<TreeOrGenome, Mode>(
                 population, trainingInputs, trainingTargets, trainingErrors,
                 validationInputs, validationTargets, validationErrors, config,
                 fittestIndividual, fittestErr);
@@ -679,7 +618,7 @@ template <class TreeOrGenome, ParsimonyMode ParsMode> void runTestCase() {
                           to_string(fileName++),
                       valRes, testRes, config, strategy,
                       chrono::duration<double>(t2 - t1).count(), bestNodeCount,
-                      bestIndivString, hitsPerGeneration);
+                      bestIndivString, hitsPerGeneration, POP_SIZE);
         } else { // SBGP
           cout << "---------------------- SBGP -------------------------"
                << endl;
@@ -697,7 +636,7 @@ template <class TreeOrGenome, ParsimonyMode ParsMode> void runTestCase() {
 
               cout << genCounter++ << " ";
 
-              const auto genRes = treeGeneration<TreeOrGenome, ParsMode>(
+              const auto genRes = generation<TreeOrGenome, Mode>(
                   population, trainingInputs, trainingTargets, trainingErrors,
                   validationInputs, validationTargets, validationErrors, config,
                   fittestIndividual, fittestErr);
@@ -725,7 +664,9 @@ template <class TreeOrGenome, ParsimonyMode ParsMode> void runTestCase() {
                 // stagnation on convergence) to the threshold error, in which
                 // case it needs a shake up
                 if (trainingErrors[e] >= get<0>(threshMax)) {
-                  population[e]->freezeToPercent<FreezeType::BOTTOM>();
+                  // need to tell the compiler that the member is a template
+                  population[e]
+                      ->template freezeToPercent<op::FreezeType::BOTTOM>();
                 }
               }
               cout << ", peturb: ";
@@ -735,7 +676,7 @@ template <class TreeOrGenome, ParsimonyMode ParsMode> void runTestCase() {
 
                 cout << genCounter++ << " ";
 
-                const auto genRes = treeGeneration<TreeOrGenome, ParsMode>(
+                const auto genRes = generation<TreeOrGenome, Mode>(
                     population, trainingInputs, trainingTargets, trainingErrors,
                     validationInputs, validationTargets, validationErrors,
                     config, fittestIndividual, fittestErr);
@@ -751,7 +692,7 @@ template <class TreeOrGenome, ParsimonyMode ParsMode> void runTestCase() {
               // unfreeze for the start of the new cycle
               // where canonical will begin
               for (const auto &p : population)
-                p->freezeToPercent<FreezeType::NONE>();
+                p->template freezeToPercent<op::FreezeType::NONE>();
 
               cout << endl;
             }
@@ -775,7 +716,7 @@ template <class TreeOrGenome, ParsimonyMode ParsMode> void runTestCase() {
                           to_string(fileName++),
                       valRes, testRes, config, strategy,
                       chrono::duration<double>(t2 - t1).count(), bestNodeCount,
-                      bestIndivString, hitsPerGeneration);
+                      bestIndivString, hitsPerGeneration, POP_SIZE);
         }
       }
     }
@@ -834,7 +775,77 @@ void testGE() {
 }
 
 int main() {
-  testGE();
+
+  // freeze only if the tree is >= 2 nodes deep
+  Tree::freezeCutoffDepth = 2;
+  Tree::freezeBottomPercent = 0.5; // freeze half the tree
+  Tree::highestConstant = 2;
+  Tree::smallestConstant = -2;
+
+  // GE params
+  Genome::chooseConstantBias = 7;
+  Genome::chooseVariableBias = 7;
+  Genome::genomeSize = 50;
+
+  // Init data processor
+  DataProcessor dataProcessor;
+
+  // create the test data
+  dataProcessor.readCSV("./dataset/training.csv");
+  vector<vector<double>> trainingInputs = dataProcessor.getInputs();
+  vector<double> trainingTargets = dataProcessor.getTargets();
+
+  dataProcessor.readCSV("./dataset/validation.csv");
+  vector<vector<double>> validationInputs = dataProcessor.getInputs();
+  vector<double> validationTargets = dataProcessor.getTargets();
+
+  dataProcessor.readCSV("./dataset/test.csv");
+  vector<vector<double>> testInputs = dataProcessor.getInputs();
+  vector<double> testTargets = dataProcessor.getTargets();
+
+  Config config = {
+      .percycle = {.localSearchGenerations = 10, .peturbGenerations = 2},
+      .cycles = 5,
+      .numThreads = 2,
+      .chooseConstantProbability = 0.5,
+      .tournamentSize = 3,
+      .numVars = static_cast<int>(trainingInputs[0].size()),
+      .prematureLeafProbability = 0.25,
+      .crossoverRate = 0.70,
+      .mutationRate = 0.05,
+      .tuneConstantProbability = 0.5,
+      .parsimonyPressure = 0.0001,
+      .highestStoppingError = 0.005,
+      .highestHitError = 0.012,
+      .freezeEliteIndividualsPercent = 0.30};
+
+  // use later
+  std::vector<GrowStrategy> growStrategies = {
+      //{.minDepth = 3, .maxDepth = 7, .fullGrow = 15, .grow = 15}, // 750
+      //{.minDepth = 3, .maxDepth = 7, .fullGrow = 60, .grow = 60}, // 600
+      //{.minDepth = 3, .maxDepth = 7, .fullGrow = 45, .grow = 45}, // 450
+      //{.minDepth = 3, .maxDepth = 7, .fullGrow = 30, .grow = 30}, // 300
+      // TODO: change back
+      {.minDepth = 3, .maxDepth = 4, .fullGrow = 3, .grow = 3}, // test
+  };
+
+  /* signature:
+template <OperationMode Mode, class TreeOrGenome>
+void runTestCase(Config &config, vector<GrowStrategy> growStrategies,
+                 const vector<vector<double>> &trainingInputs,
+                 const vector<double> &trainingTargets,
+                 const vector<vector<double>> &validationInputs,
+                 const vector<double> &validationTargets,
+                 const vector<vector<double>> &testInputs,
+                 const vector<double> &testTargets) {
+                 */
+
+  cout << "Starting GE Evolution..." << endl;
+  cout << "input size" << trainingInputs[0].size() << endl;
+
+  runTestCase<OperationMode::GE, Genome>(
+      config, growStrategies, trainingInputs, trainingTargets, validationInputs,
+      validationTargets, testInputs, testTargets);
 
   return 0;
 }

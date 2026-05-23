@@ -4,8 +4,10 @@
 #include <cassert>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <string>
 #include <tuple>
+#include <utility>
 using namespace std;
 
 int Genome::genomeSize = 10;
@@ -47,6 +49,20 @@ std::tuple<int, int, int> getRulesVarsConst(int varSize) {
 
   return std::make_tuple(numRules, numVars, numConstants);
 }
+
+void Genome::mutate() {
+  cout << "mutation not implemented for genes!!!" << endl;
+}
+
+void Genome::crossover(Genome &other) {
+  cout << "crossover not implemented for genes!!!" << endl;
+}
+
+template <op::FreezeType> void Genome::freezeToPercent(double scorediff) {
+  cout << "Freezing not implemented for genes!!" << endl;
+}
+
+unique_ptr<Genome> Genome::clone() { return std::make_unique<Genome>(*this); }
 
 void Genome::generateRandomGenomeRec(int currDepth, int varSize, bool grow) {
 
@@ -323,3 +339,8 @@ string Genome::toString() const {
 
   return res + "]";
 }
+
+// Explicitly tell the compiler to generate the code for these exact types
+template void Genome::freezeToPercent<op::FreezeType::BOTTOM>(double);
+template void Genome::freezeToPercent<op::FreezeType::NONE>(double);
+template void Genome::freezeToPercent<op::FreezeType::TOP>(double);

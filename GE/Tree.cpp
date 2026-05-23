@@ -85,7 +85,7 @@ void Tree::collectNodesRec(std::unique_ptr<Node> &curr,
   // bottom freeze: stop at the threshold
   // any layer below this layer cannot be collected
   // cannot freeze the root node : exclusive >
-  if (this->freezeType == FreezeType::BOTTOM &&
+  if (this->freezeType == op::FreezeType::BOTTOM &&
       currDepth > this->frozenThresholdLayer)
     return;
 
@@ -94,10 +94,10 @@ void Tree::collectNodesRec(std::unique_ptr<Node> &curr,
   // 2. top freeze and below the threshold layer
   // 3. bottom freeze and above the threshold layer (previously checked)
   // cannot freeze the deepest layer
-  if (this->freezeType == FreezeType::NONE ||
-      (this->freezeType == FreezeType::TOP &&
+  if (this->freezeType == op::FreezeType::NONE ||
+      (this->freezeType == op::FreezeType::TOP &&
        currDepth >= this->frozenThresholdLayer) ||
-      this->freezeType == FreezeType::BOTTOM)
+      this->freezeType == op::FreezeType::BOTTOM)
     res.push_back(&curr);
 
   std::vector<std::unique_ptr<Node> *> tempChildren;
@@ -287,17 +287,17 @@ Tree::Tree(int depth, int numVars, double chooseConstantProbability,
   // INFO: generate a random operator for the root
   this->root = std::make_unique<OperatorNode>(getRandomOperator());
 
-  this->freezeToPercent<FreezeType::NONE>();
+  this->freezeToPercent<op::FreezeType::NONE>();
 }
 
-template <FreezeType Type> void Tree::freezeToPercent(double scorediff) {
+template <op::FreezeType Type> void Tree::freezeToPercent(double scorediff) {
 
   const auto depth = this->calculateCurrDepth();
 
   if (depth >= Tree::freezeCutoffDepth) {
-    if constexpr (Type == FreezeType::TOP) {
+    if constexpr (Type == op::FreezeType::TOP) {
 
-      this->freezeType = FreezeType::TOP;
+      this->freezeType = op::FreezeType::TOP;
 
       // can freeze all layers except the leaf nodes
       this->frozenThresholdLayer =
@@ -310,9 +310,9 @@ template <FreezeType Type> void Tree::freezeToPercent(double scorediff) {
 
       return;
 
-    } else if constexpr (Type == FreezeType::BOTTOM) {
+    } else if constexpr (Type == op::FreezeType::BOTTOM) {
 
-      this->freezeType = FreezeType::BOTTOM;
+      this->freezeType = op::FreezeType::BOTTOM;
 
       this->frozenThresholdLayer =
           round((calculateCurrDepth() - 1) * Tree::freezeBottomPercent);
@@ -327,10 +327,10 @@ template <FreezeType Type> void Tree::freezeToPercent(double scorediff) {
   }
 
   // not a candidate for freezing, or chose none
-  this->freezeType = FreezeType::NONE;
+  this->freezeType = op::FreezeType::NONE;
 }
 
 // Tell the compiler to actually generate the binary for these specific types
-template void Tree::freezeToPercent<FreezeType::TOP>(double);
-template void Tree::freezeToPercent<FreezeType::BOTTOM>(double);
-template void Tree::freezeToPercent<FreezeType::NONE>(double);
+template void Tree::freezeToPercent<op::FreezeType::TOP>(double);
+template void Tree::freezeToPercent<op::FreezeType::BOTTOM>(double);
+template void Tree::freezeToPercent<op::FreezeType::NONE>(double);
