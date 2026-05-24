@@ -16,8 +16,12 @@ private:
   double evaluateRec(const std::vector<double> &vars, int &currInd,
                      int &currCalls);
   int getNextGenome(int &currInd);
+
+  int getDepthRec(int currDepth, int currInd, int varSize);
   int nodeCount;
   int maxInitialDepth;
+  int frozenIndex;
+  op::FreezeType freezeType;
 
 public:
   static int genomeSize;

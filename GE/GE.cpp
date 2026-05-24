@@ -58,7 +58,32 @@ void Genome::crossover(Genome &other) {
   cout << "crossover not implemented for genes!!!" << endl;
 }
 
-template <op::FreezeType> void Genome::freezeToPercent(double scorediff) {
+template <op::FreezeType Type> void Genome::freezeToPercent(double scorediff) {
+  /*
+   * for a tree
+      this->frozenThresholdLayer =
+          round((calculateCurrDepth() - 1) * scorediff);
+   */
+  if constexpr (Type == op::FreezeType::NONE) {
+    // unfreeze everything
+    this->frozenIndex = -1;
+    this->freezeType = op::FreezeType::NONE;
+    return;
+  } else if constexpr (Type == op::FreezeType::TOP) {
+    // freeze up to one third of the genome
+    // this autocasts to an int
+    this->frozenIndex = (static_cast<double>(genomeSize) / 3) * scorediff;
+
+    this->freezeType = op::FreezeType::TOP;
+  } else { // bottom freeze
+
+    this->freezeType = op::FreezeType::BOTTOM;
+
+    // freeze the bottom third of the genome
+    this->frozenIndex =
+        static_cast<double>(genomeSize) - (static_cast<double>(genomeSize) / 3);
+  }
+
   cout << "Freezing not implemented for genes!!" << endl;
 }
 
@@ -177,6 +202,9 @@ void Genome::generateRandomGenome(bool grow, int varSize) {
 Genome::Genome(int depth, bool grow, int varSize) {
   this->maxInitialDepth = depth;
   this->nodeCount = -1;
+  this->frozenIndex = -1;
+  // unfreeze
+  this->freezeType = op::FreezeType::NONE;
   generateRandomGenome(grow, varSize);
 }
 
@@ -235,7 +263,8 @@ double Genome::evaluateRec(const std::vector<double> &vars, int &currInd,
       chooseConstantThreshold + Genome::chooseConstantBias;
 
   // added the rules and the constant max indices
-  // therefore if it is just greater, it is out of bounds and in the vars space
+  // therefore if it is just greater, it is out of bounds and in the vars
+  // space
   if (decision >= chooseVariableThreshold) {
     return vars[(decision - static_cast<int>(RuleSet::SIZE)) % vars.size()];
   }
@@ -265,7 +294,8 @@ double Genome::evaluateRec(const std::vector<double> &vars, int &currInd,
   case RuleSet::ADD: {
     // add the next 2 genomes
     // don't need to worry about incrementing it, because it is passed by
-    // reference when each function call starts, the memory will be overwritten
+    // reference when each function call starts, the memory will be
+    // overwritten
     const auto left = evaluateRec(vars, currInd, currCalls);
     const auto right = evaluateRec(vars, currInd, currCalls);
 
@@ -325,8 +355,8 @@ double Genome::evaluate(const std::vector<double> &vars) {
   const auto res = evaluateRec(vars, currInd, currCalls);
 
   // set the "node count" to the number of calls that it takes to evaluate the
-  // gene this is essentially how many children the genome has, and dictates the
-  // evaluation complexity
+  // gene this is essentially how many children the genome has, and dictates
+  // the evaluation complexity
   this->nodeCount = currCalls;
 
   return res;
