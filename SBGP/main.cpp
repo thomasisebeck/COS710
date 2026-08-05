@@ -532,9 +532,9 @@ void runTestCase() {
 
   std::vector<GrowStrategy> growStrategies = {
       {.minDepth = 3, .maxDepth = 7, .fullGrow = 15, .grow = 15}, // 750
-      //{.minDepth = 3, .maxDepth = 7, .fullGrow = 60, .grow = 60}, // 600
-      //{.minDepth = 3, .maxDepth = 7, .fullGrow = 45, .grow = 45}, // 450
-      //{.minDepth = 3, .maxDepth = 7, .fullGrow = 30, .grow = 30}, // 300
+      {.minDepth = 3, .maxDepth = 7, .fullGrow = 60, .grow = 60}, // 600
+      {.minDepth = 3, .maxDepth = 7, .fullGrow = 45, .grow = 45}, // 450
+      {.minDepth = 3, .maxDepth = 7, .fullGrow = 30, .grow = 30}, // 300
   };
 
   std::vector<int> topSeeds;

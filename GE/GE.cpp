@@ -51,11 +51,45 @@ std::tuple<int, int, int> getRulesVarsConst(int varSize) {
 }
 
 void Genome::mutate() {
-  cout << "mutation not implemented for genes!!!" << endl;
+  int index = 0;
+
+  if (this->freezeType == op::FreezeType::NONE) {
+    // Pick any random index across the whole genome
+    index = Tree::getRandomInt(0, this->genome.size() - 1);
+  } else if (this->freezeType == op::FreezeType::BOTTOM) {
+    index = Tree::getRandomInt(((this->genome.size() - 1) / 3),
+                               (this->genome.size() - 1));
+  } else {
+    // top freeze
+    index = Tree::getRandomInt(0, ((this->genome.size() - 1) / 3));
+  }
+
+  this->genome[index] = Tree::getRandomInt(0, MAX_INT_CODON);
 }
 
 void Genome::crossover(Genome &other) {
-  cout << "crossover not implemented for genes!!!" << endl;
+  int minIndex = 0;
+  int maxIndex = this->genome.size() - 1;
+
+  // get boundarise for crossover
+  if (this->freezeType == op::FreezeType::NONE) {
+    minIndex = 0;
+    maxIndex = this->genome.size() - 1;
+  } else if (this->freezeType == op::FreezeType::BOTTOM) {
+    minIndex = (this->genome.size() - 1) / 3;
+    maxIndex = this->genome.size() - 1;
+  } else {
+    // Top freeze
+    minIndex = 0;
+    maxIndex = (this->genome.size() - 1) / 3;
+  }
+
+  // get the point
+  int crossPoint = Tree::getRandomInt(minIndex, maxIndex);
+
+  for (int i = crossPoint; i <= maxIndex; ++i) {
+    std::swap(this->genome[i], other.genome[i]);
+  }
 }
 
 template <op::FreezeType Type> void Genome::freezeToPercent(double scorediff) {
@@ -83,8 +117,6 @@ template <op::FreezeType Type> void Genome::freezeToPercent(double scorediff) {
     this->frozenIndex =
         static_cast<double>(genomeSize) - (static_cast<double>(genomeSize) / 3);
   }
-
-  cout << "Freezing not implemented for genes!!" << endl;
 }
 
 unique_ptr<Genome> Genome::clone() { return std::make_unique<Genome>(*this); }

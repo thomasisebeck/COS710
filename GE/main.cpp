@@ -530,7 +530,7 @@ void runTestCase(Config &config, vector<GrowStrategy> growStrategies,
   std::vector<int> topSeeds;
 
   const int START_SEED = 1001;
-  const int END_SEED = 1002;
+  const int END_SEED = 1005;
 
   for (int i = START_SEED; i <= END_SEED; i++) {
     topSeeds.push_back(i);
@@ -658,6 +658,9 @@ void runTestCase(Config &config, vector<GrowStrategy> growStrategies,
               auto threshMax = utils::getThreshError<utils::Mode::MAX>(
                   trainingErrors, config.freezeEliteIndividualsPercent);
 
+              auto threshMin = utils::getThreshError<utils::Mode::MIN>(
+                  trainingErrors, config.freezeEliteIndividualsPercent);
+
               // threshold and max error will likely always be large enough
               for (int e = 0; e < trainingErrors.size(); e++) {
                 // check if this individuals error is above or equal (prevents
@@ -665,10 +668,22 @@ void runTestCase(Config &config, vector<GrowStrategy> growStrategies,
                 // case it needs a shake up
                 if (trainingErrors[e] >= get<0>(threshMax)) {
                   // need to tell the compiler that the member is a template
+                  // cout << "error: " << trainingErrors[e] << endl;
+                  // cout << "freezing bottom" << endl;
                   population[e]
                       ->template freezeToPercent<op::FreezeType::BOTTOM>();
                 }
+
+                else if (trainingErrors[e] < get<0>(threshMin)) {
+
+                  //               cout << "error: " << trainingErrors[e] <<
+                  //               endl;
+                  //             cout << "freezing top" << endl;
+                  population[e]
+                      ->template freezeToPercent<op::FreezeType::TOP>();
+                }
               }
+
               cout << ", peturb: ";
 
               for (int petGen = 0; petGen < config.percycle.peturbGenerations;
@@ -689,6 +704,7 @@ void runTestCase(Config &config, vector<GrowStrategy> growStrategies,
                 hitsPerGeneration.push_back(genRes.hits);
               }
 
+              cout << "unfreezing" << endl;
               // unfreeze for the start of the new cycle
               // where canonical will begin
               for (const auto &p : population)
@@ -804,9 +820,9 @@ int main() {
   vector<double> testTargets = dataProcessor.getTargets();
 
   Config config = {
-      .percycle = {.localSearchGenerations = 10, .peturbGenerations = 2},
+      .percycle{.localSearchGenerations = 10, .peturbGenerations = 2},
       .cycles = 5,
-      .numThreads = 2,
+      .numThreads = 8,
       .chooseConstantProbability = 0.5,
       .tournamentSize = 3,
       .numVars = static_cast<int>(trainingInputs[0].size()),
@@ -821,12 +837,11 @@ int main() {
 
   // use later
   std::vector<GrowStrategy> growStrategies = {
-      //{.minDepth = 3, .maxDepth = 7, .fullGrow = 15, .grow = 15}, // 750
-      //{.minDepth = 3, .maxDepth = 7, .fullGrow = 60, .grow = 60}, // 600
-      //{.minDepth = 3, .maxDepth = 7, .fullGrow = 45, .grow = 45}, // 450
-      //{.minDepth = 3, .maxDepth = 7, .fullGrow = 30, .grow = 30}, // 300
+      {.minDepth = 3, .maxDepth = 7, .fullGrow = 30, .grow = 30}, // 300
+      {.minDepth = 3, .maxDepth = 7, .fullGrow = 45, .grow = 45}, // 450
+      {.minDepth = 3, .maxDepth = 7, .fullGrow = 60, .grow = 60}, // 600
+      {.minDepth = 3, .maxDepth = 7, .fullGrow = 75, .grow = 75}, // 750
       // TODO: change back
-      {.minDepth = 3, .maxDepth = 4, .fullGrow = 3, .grow = 3}, // test
   };
 
   /* signature:
